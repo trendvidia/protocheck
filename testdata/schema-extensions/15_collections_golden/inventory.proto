@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 TrendVidia, LLC.
+//
+// Fixture: 15_collections_golden
+// Exercises: per-element validation on repeated and map fields (§6.4,
+// issues #141/#153) — element rules from the element type's alias
+// chain, KEY rules from the map key type's alias chain (violations
+// carry for_key = true), and a field-level rule evaluated against the
+// collection as a whole.
+//
+// Expected behavior: see ../15_collections_golden.textproto — engines
+// validate instance.textproto against this schema and diff the emitted
+// Report against that golden.
+
+syntax = "proto3";
+
+package fixtures.collections;
+
+import "protowire/schema/v1/annotations.proto";
+
+// Map KEY type: entry keys validate against this chain (§6.4); a key
+// violation sets EnrichedViolation.for_key with the entry's map
+// subscript addressing the entry as usual (§7).
+type Sku = string
+  @validate(this.size() == 8,
+            code = "inv.sku.length",
+            message = "SKU must be 8 characters");
+
+// Map VALUE / repeated ELEMENT rules ride the element type's chain.
+type Quantity = int64
+  @validate(this >= 0,
+            code = "inv.qty.negative",
+            message = "quantity cannot be negative");
+
+message Inventory {
+  // Both dimensions validate per-entry: keys against Sku, values
+  // against Quantity.
+  map<Sku, Quantity> stock = 1;
+
+  // Per-element (Sku chain) plus a field-level rule against the
+  // collection as a whole, evaluated after the element rules
+  // (base -> derived -> field-level order, §6.4).
+  repeated Sku discontinued = 2
+    @validate(this.size() <= 2,
+              code = "inv.discontinued.too_many",
+              message = "at most 2 discontinued SKUs");
+}

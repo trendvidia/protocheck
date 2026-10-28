@@ -1,0 +1,831 @@
+syntax = "proto3";
+
+package testpb;
+
+import "google/protobuf/timestamp.proto";
+import "protocheck/protocheck.proto";
+
+option go_package = "github.com/trendvidia/protocheck/v2/internal/testpb";
+
+// ─── Basic scalar validation ────────────────────────────────────────────────
+
+message User {
+  string name = 1 [(protocheck.field) = {
+    required: true
+    string: {
+      min_len: 1
+      max_len: 100
+    }
+  }];
+
+  string email = 2 [(protocheck.field) = {
+    required: true
+    string: {email: true}
+  }];
+
+  uint32 age = 3 [(protocheck.field).uint32 = {
+    gte: 0
+    lte: 150
+  }];
+
+  string phone = 4 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {pattern: "^\\+?[0-9\\-\\s]+$"}
+  }];
+
+  repeated string tags = 5 [(protocheck.field).repeated = {
+    max_items: 10
+    unique: true
+  }];
+}
+
+// ─── Numeric constraints ────────────────────────────────────────────────────
+
+message Product {
+  string name = 1 [(protocheck.field) = {
+    required: true
+    string: {min_len: 1}
+  }];
+
+  double price = 2 [(protocheck.field).double = {gt: 0.0}];
+
+  int32 quantity = 3 [(protocheck.field).int32 = {gte: 0}];
+
+  Status status = 4 [(protocheck.field).enum = {defined_only: true}];
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ACTIVE = 1;
+  STATUS_INACTIVE = 2;
+}
+
+// ─── Custom expressions ─────────────────────────────────────────────────────
+
+message DateRange {
+  int64 start_epoch = 1;
+  int64 end_epoch = 2;
+
+  option (protocheck.message) = {
+    check: [
+      {
+        id: "valid_range"
+        message: "end_epoch must be greater than start_epoch"
+        expression: "end_epoch > start_epoch"
+      }
+    ]
+  };
+}
+
+message Discount {
+  double percentage = 1 [(protocheck.field) = {
+    check: [
+      {
+        id: "valid_percentage"
+        message: "percentage must be between 0 and 100"
+        expression: "this >= 0.0 && this <= 100.0"
+      }
+    ]
+  }];
+}
+
+// Expression over a uint64 field — regression for #17: a value above
+// MaxInt64 must not wrap negative in expression bindings.
+message UnsignedQuota {
+  uint64 used = 1 [(protocheck.field) = {
+    check: [
+      {
+        id: "quota_bound"
+        message: "used must be at most 1000"
+        expression: "this <= 1000"
+      }
+    ]
+  }];
+}
+
+// uint64 field validated by a custom Go function taking uint64.
+message MeteredUsage {
+  uint64 bytes_used = 1 [(protocheck.field) = {
+    check: [
+      {
+        id: "fits_quota"
+        message: "bytes_used exceeds quota"
+        expression: "check.FitsQuota(this)"
+      }
+    ]
+  }];
+}
+
+// int32 field passed to a custom function declared with a narrow parameter
+// type — exercises the wrapper's reflect.Convert path.
+message NarrowArgs {
+  int32 code = 1 [(protocheck.field) = {
+    check: [
+      {
+        id: "code_ok"
+        message: "code rejected"
+        expression: "check.CodeOK(this)"
+      }
+    ]
+  }];
+}
+
+// ─── Nested messages ────────────────────────────────────────────────────────
+
+message Address {
+  string street = 1 [(protocheck.field) = {
+    required: true
+    string: {min_len: 1}
+  }];
+
+  string city = 2 [(protocheck.field) = {
+    required: true
+    string: {min_len: 1}
+  }];
+
+  string zip_code = 3 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {pattern: "^[0-9]{5}(-[0-9]{4})?$"}
+  }];
+}
+
+message Order {
+  string id = 1 [(protocheck.field) = {
+    required: true
+    string: {uuid: true}
+  }];
+
+  Address shipping_address = 2 [(protocheck.field).required = true];
+  Address billing_address = 3;
+
+  repeated LineItem items = 4 [(protocheck.field).repeated = {min_items: 1}];
+}
+
+message LineItem {
+  string product_id = 1 [(protocheck.field) = {
+    required: true
+    string: {min_len: 1}
+  }];
+
+  uint32 quantity = 2 [(protocheck.field).uint32 = {gte: 1}];
+
+  double unit_price = 3 [(protocheck.field).double = {gt: 0.0}];
+}
+
+// ─── Map fields ─────────────────────────────────────────────────────────────
+
+message Config {
+  map<string, string> labels = 1 [(protocheck.field).map = {
+    min_pairs: 1
+    max_pairs: 20
+    keys: {
+      string: {min_len: 1}
+    }
+    values: {
+      string: {max_len: 256}
+    }
+  }];
+}
+
+// Per-element rules on a scalar list (structured-path subscript coverage).
+message Inventory {
+  repeated string skus = 1 [(protocheck.field).repeated = {
+    items: {
+      string: {min_len: 3}
+    }
+  }];
+}
+
+// ─── Oneof constraints ──────────────────────────────────────────────────────
+
+message Notification {
+  string recipient = 1 [(protocheck.field) = {
+    required: true
+    string: {min_len: 1}
+  }];
+
+  oneof channel {
+    option (protocheck.oneof).required = true;
+
+    string email_address = 2 [(protocheck.field).string = {email: true}];
+    string phone_number = 3 [(protocheck.field).string = {min_len: 10}];
+    string webhook_url = 4 [(protocheck.field).string = {uri: true}];
+  }
+}
+
+// ─── Ignore behavior ────────────────────────────────────────────────────────
+
+message OptionalFields {
+  string nickname = 1 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {min_len: 3}
+  }];
+
+  string always_ignored = 2 [(protocheck.field) = {
+    ignore: IGNORE_ALWAYS
+    string: {min_len: 100}
+  }];
+}
+
+// ─── Disabled message ───────────────────────────────────────────────────────
+
+message SkippedMessage {
+  option (protocheck.message).disabled = true;
+
+  string name = 1 [(protocheck.field) = {
+    required: true
+    string: {min_len: 999}
+  }];
+}
+
+// disabled outer message containing a nested message. Even though the nested
+// User has its own required-field rules, disabling the outer message must
+// short-circuit recursion.
+message DisabledWithNested {
+  option (protocheck.message).disabled = true;
+
+  string name = 1 [(protocheck.field).required = true];
+  User user = 2;
+}
+
+// ─── Error-path fixtures ────────────────────────────────────────────────────
+
+// Field-level expression that fails to compile.
+message BadFieldCompile {
+  string s = 1 [(protocheck.field) = {
+    check: [
+      {
+        id: "compile_fail"
+        message: "irrelevant — compile fails before this is read"
+        expression: "@"
+      }
+    ]
+  }];
+}
+
+// Field-level expression that compiles cleanly but panics at eval time
+// (integer division by zero for the default value 0).
+message BadFieldEval {
+  int32 v = 1 [(protocheck.field) = {
+    check: [
+      {
+        id: "eval_fail"
+        message: "irrelevant — eval fails before this is read"
+        expression: "100 / this == 100"
+      }
+    ]
+  }];
+}
+
+// Message-level expression that fails to compile.
+message BadMessageCompile {
+  int32 x = 1;
+
+  option (protocheck.message) = {
+    check: [
+      {
+        id: "msg_compile_fail"
+        message: "irrelevant — compile fails before this is read"
+        expression: "@"
+      }
+    ]
+  };
+}
+
+// ─── Ignore mode distinctions ───────────────────────────────────────────────
+
+// proto3 optional lets msg.Has() distinguish unset from explicitly-set-to-default.
+// IGNORE_IF_UNPOPULATED skips only the unset case; IGNORE_IF_DEFAULT_VALUE
+// skips both unset AND explicit-default.
+message IgnoreModes {
+  optional string default_skip = 1 [(protocheck.field) = {
+    ignore: IGNORE_IF_DEFAULT_VALUE
+    string: {min_len: 3}
+  }];
+  optional string unpop_skip = 2 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {min_len: 3}
+  }];
+}
+
+// Message-typed field with IGNORE_IF_UNPOPULATED: skip recursion when nil,
+// recurse normally when populated.
+message OptionalNested {
+  Address shipping = 1 [(protocheck.field).ignore = IGNORE_IF_UNPOPULATED];
+}
+
+// ─── Bytes rules ────────────────────────────────────────────────────────────
+
+message BytesShapes {
+  bytes signature = 1 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {const: "\x01\x02\x03"}
+  }];
+
+  bytes token = 2 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {len: 4}
+  }];
+
+  bytes payload = 3 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {
+      min_len: 2
+      max_len: 8
+    }
+  }];
+
+  bytes header = 4 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {prefix: "\xCA\xFE"}
+  }];
+
+  bytes footer = 5 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {suffix: "\xBE\xEF"}
+  }];
+
+  bytes magic = 6 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {contains: "\xDE\xAD"}
+  }];
+
+  bytes addr = 7 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {ip: true}
+  }];
+
+  bytes addr4 = 8 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {ipv4: true}
+  }];
+
+  bytes addr6 = 9 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {ipv6: true}
+  }];
+
+  bytes allowlisted = 10 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {
+      in: [
+        "\x01\x02",
+        "\x03\x04"
+      ]
+    }
+  }];
+
+  bytes blocklisted = 11 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bytes: {
+      not_in: [
+        "\xDE\xAD",
+        "\xBE\xEF"
+      ]
+    }
+  }];
+}
+
+// ─── Numeric rules ──────────────────────────────────────────────────────────
+
+message NumericShapes {
+  // float
+  float weight = 1 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    float: {const: 1.5}
+  }];
+  float temperature = 2 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    float: {finite: true}
+  }];
+  float voltage = 3 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    float: {
+      in: [
+        3.3,
+        5.0,
+        12.0
+      ]
+    }
+  }];
+  float current = 4 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    float: {
+      not_in: [
+        1.0,
+        2.0
+      ]
+    }
+  }];
+
+  // double
+  double pi = 5 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    double: {const: 3.14}
+  }];
+  double mass = 6 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    double: {finite: true}
+  }];
+
+  // int32
+  int32 code32 = 7 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    int32: {const: 42}
+  }];
+
+  // int64 — all rules
+  int64 timestamp = 8 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    int64: {
+      gte: 1
+      lte: 1000000
+    }
+  }];
+  int64 seq = 9 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    int64: {const: -7}
+  }];
+  int64 score = 10 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    int64: {
+      in: [
+        10,
+        20,
+        30
+      ]
+    }
+  }];
+  int64 anti_score = 11 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    int64: {
+      not_in: [
+        -1,
+        -2
+      ]
+    }
+  }];
+  int64 strict_lt = 12 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    int64: {lt: 100}
+  }];
+  int64 strict_gt = 13 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    int64: {gt: 100}
+  }];
+
+  // uint32
+  uint32 code32u = 14 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    uint32: {const: 100}
+  }];
+
+  // uint64 — all rules
+  uint64 bignum = 15 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    uint64: {
+      gte: 1
+      lte: 1000000
+    }
+  }];
+  uint64 bigconst = 16 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    uint64: {const: 18446744073709551613}
+  }];
+  uint64 port = 17 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    uint64: {
+      in: [
+        80,
+        443,
+        8080
+      ]
+    }
+  }];
+  uint64 blocked_port = 18 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    uint64: {
+      not_in: [
+        22,
+        23
+      ]
+    }
+  }];
+  uint64 strict_ult = 19 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    uint64: {lt: 100}
+  }];
+  uint64 strict_ugt = 20 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    uint64: {gt: 100}
+  }];
+}
+
+message BoolConsts {
+  // optional so msg.Has() distinguishes unset from explicit false; that
+  // lets IGNORE_IF_UNPOPULATED skip unset fields without conflating with
+  // explicit-false validation.
+  optional bool agreed = 1 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bool: {const: true}
+  }];
+  optional bool optout = 2 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    bool: {const: false}
+  }];
+}
+
+message EnumConsts {
+  Status preferred = 1 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    enum: {const: 1} /* STATUS_ACTIVE */
+  }];
+  Status blocked = 2 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    enum: {
+      not_in: [2] /* STATUS_INACTIVE */
+    }
+  }];
+}
+
+// ─── String rules (non-format) ──────────────────────────────────────────────
+
+message StringShapes {
+  string code = 1 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {const: "ABC"}
+  }];
+
+  // len is counted in runes; "café" has len 4 even though it's 5 bytes.
+  string slug = 2 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {len: 5}
+  }];
+
+  // len_bytes counts raw bytes; "café" is 5 bytes.
+  string legacy_slug = 3 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {len_bytes: 5}
+  }];
+
+  string short_text = 4 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {min_bytes: 4}
+  }];
+
+  string truncated_text = 5 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {max_bytes: 6}
+  }];
+
+  string prefixed = 6 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {prefix: "pre-"}
+  }];
+
+  string suffixed = 7 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {suffix: "-end"}
+  }];
+
+  string must_contain = 8 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {contains: "foo"}
+  }];
+
+  string must_not_contain = 9 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {not_contains: "spam"}
+  }];
+
+  string relative_uri = 10 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {uri_ref: true}
+  }];
+}
+
+// ─── String format validators ───────────────────────────────────────────────
+
+message Formats {
+  string email = 1 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {email: true}
+  }];
+  string hostname = 2 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {hostname: true}
+  }];
+  string ip_address = 3 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {ip: true}
+  }];
+  string ipv4_address = 4 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {ipv4: true}
+  }];
+  string ipv6_address = 5 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {ipv6: true}
+  }];
+  string uri_value = 6 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {uri: true}
+  }];
+  string uuid_value = 7 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {uuid: true}
+  }];
+}
+
+// ─── In / NotIn ─────────────────────────────────────────────────────────────
+
+message Membership {
+  string country_code = 1 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {
+      in: [
+        "US",
+        "CA",
+        "MX",
+        "BR"
+      ]
+    }
+  }];
+
+  int32 priority = 2 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    int32: {
+      in: [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  }];
+
+  string blocked_word = 3 [(protocheck.field) = {
+    ignore: IGNORE_IF_UNPOPULATED
+    string: {
+      not_in: [
+        "spam",
+        "scam"
+      ]
+    }
+  }];
+}
+
+// ─── Nested message expressions ─────────────────────────────────────────────
+
+message Location {
+  string city = 1;
+  string country = 2;
+}
+
+message Shipment {
+  Location origin = 1;
+  Location destination = 2;
+  double weight_kg = 3;
+
+  option (protocheck.message) = {
+    check: [
+      {
+        id: "different_cities"
+        message: "origin and destination cities must differ"
+        expression: "origin.city != destination.city"
+      },
+      {
+        id: "different_countries_heavy"
+        message: "international shipments must be under 30kg"
+        expression: "origin.country == destination.country || weight_kg < 30.0"
+      }
+    ]
+  };
+}
+
+// ─── Custom function expressions ────────────────────────────────────────────
+
+message BrazilianCompany {
+  string cnpj = 1 [(protocheck.field) = {
+    required: true
+    check: [
+      {
+        id: "valid_cnpj"
+        message: "invalid CNPJ"
+        expression: "check.IsValidCNPJ(this)"
+      }
+    ]
+  }];
+
+  string trade_name = 2 [(protocheck.field) = {
+    required: true
+    string: {min_len: 1}
+  }];
+}
+
+// ─── Built-in expression language (no expression engine) ────────────────────
+
+// A cross-field rule as RFC-001 §5.4 writes it: a registered function taking
+// the message, called here by a suffix of its FQN.
+message TempoRange {
+  uint32 min_bpm = 1;
+  uint32 max_bpm = 2;
+
+  option (protocheck.message) = {
+    check: [
+      {
+        id: "tempo_ordered"
+        expression: "tempo_ordered(this)"
+      },
+      {
+        id: "same_instant"
+        message: "now() must be one instant per Validate call"
+        expression: "now() == now()"
+      }
+    ]
+  };
+}
+
+message Handle {
+  string name = 1 [(protocheck.field) = {
+    check: [
+      {
+        id: "handle_shape"
+        message: "handle must start with @ and be at most 16 characters"
+        expression: "this.starts_with(\"@\") && this.size() <= 16"
+      }
+    ]
+  }];
+}
+
+// Field-level check rules on message-typed fields (#68): `this` binds per
+// RFC-001 §6.2, so the Timestamp as time.Time and the plain message as itself.
+message CheckedInner {
+  string name = 1;
+}
+
+message MessageFieldCheck {
+  CheckedInner inner = 1 [(protocheck.field) = {
+    check: [
+      {
+        id: "inner_never"
+        message: "inner always fails"
+        expression: "false"
+      }
+    ]
+  }];
+  google.protobuf.Timestamp due = 2 [(protocheck.field) = {
+    check: [
+      {
+        id: "due_not_future"
+        message: "due must not be in the future"
+        expression: "this <= now()"
+      }
+    ]
+  }];
+}
+
+// Check rules on message-typed collection elements (#73): repeated items and
+// map values bind `this` per RFC-001 §6.2, as a singular field does.
+message MessageCollectionCheck {
+  repeated google.protobuf.Timestamp stamps = 1 [(protocheck.field) = {
+    repeated: {
+      items: {
+        check: [
+          {
+            id: "stamp_not_future"
+            message: "stamp must not be in the future"
+            expression: "this <= now()"
+          }
+        ]
+      }
+    }
+  }];
+  map<string, google.protobuf.Timestamp> due_by_name = 2 [(protocheck.field) = {
+    map: {
+      values: {
+        check: [
+          {
+            id: "due_not_future"
+            message: "due must not be in the future"
+            expression: "this <= now()"
+          }
+        ]
+      }
+    }
+  }];
+  map<string, CheckedInner> inner_by_name = 3 [(protocheck.field) = {
+    map: {
+      values: {
+        check: [
+          {
+            id: "inner_never"
+            message: "inner always fails"
+            expression: "false"
+          }
+        ]
+      }
+    }
+  }];
+}

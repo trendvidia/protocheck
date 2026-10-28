@@ -1,0 +1,16 @@
+# proto-file: myco/users/user.proto
+# proto-message: myco.users.User
+#
+# The invalid User instance the 07_report_golden.textproto Report was
+# computed from:
+#   - email fails CompanyEmail's ends_with refinement (type-chain
+#     provenance in the golden);
+#   - phone is ABSENT (three-state presence) — @required fires; there
+#     is deliberately no line for it here;
+#   - country is producer-set to "DE", so @default("US") does NOT
+#     substitute; the inline `in` rule fails with the use-site code.
+# The message-level same_domain(this) rule passes (pinned always-pass
+# conformance stub; see ../README.md).
+
+email: "alice@example.org"
+country: "DE"

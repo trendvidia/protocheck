@@ -1,0 +1,94 @@
+# proto-file: protowire/schema/v1/report.proto
+# proto-message: protowire.schema.v1.Report
+#
+# Golden validation report (RFC-001 §7) for the worked-example
+# `myco.users.User` message (RFC-001 §5.3), as emitted by a conformant
+# engine in collect-all mode. Cross-port conformance: every port's engine,
+# given the same instance and rules, must produce a semantically equal
+# Report (violation order follows §6.4 source-order evaluation;
+# wall_time_nanos and engine are excluded from equality).
+#
+# The schema and instance are executable fixtures (issue #135):
+#   schema:   07_report_golden/myco/users/user.proto (+ myco/commons
+#             imports; import roots: 07_report_golden/ and the repo's
+#             proto/ mapped as protowire/)
+#   instance: 07_report_golden/instance.textproto
+# Source locations below cite user.proto's field declaration lines;
+# conformance stubs for the declared functions are pinned in README.md.
+# Every rule here resolved through user.proto's embedded source map, so
+# every violation carries source_ref — the §8.3.1 rule join key
+# (protowire#142/#161); deterministic from the descriptor, it
+# participates in equality with no carve-out.
+#
+# Exercises the three enrichment shapes:
+#   - RULE_KIND_TYPE_REFINEMENT with a 3-link type_chain (CompanyEmail)
+#   - RULE_KIND_REQUIRED with actual_value UNSET (three-state presence:
+#     absence is the violation, so there is no value to capture)
+#   - RULE_KIND_VALIDATE with use-site code and message overrides
+#
+# cause.params is empty on every violation: all three rules are inline
+# expressions, and params are populated only by function implementations
+# and spec-defined synthetic violations (§7, params provenance).
+
+message_type: "myco.users.User"
+mode: EXECUTION_MODE_COLLECT_ALL
+truncated: false
+engine {
+  name: "protocheck-go/cel"
+  version: "1.2.0"
+}
+wall_time_nanos: 41250
+violations {
+  cause {
+    code: "myco.commons.email.company_domain"
+    fallback_message: "must be an @acme.com address"
+  }
+  path {
+    segments { field_name: "email" field_number: 1 }
+  }
+  type_chain: "string"
+  type_chain: "myco.commons.Email"
+  type_chain: "myco.commons.CompanyEmail"
+  actual_value { string_value: "alice@example.org" }
+  source { file: "myco/users/user.proto" line: 32 column: 3 }
+  rule_kind: RULE_KIND_TYPE_REFINEMENT
+  # validate#1: the email field's list carries Email's rule (#0), then
+  # CompanyEmail's (#1) — the failing rule is the derived alias's.
+  source_ref {
+    file: "myco/users/user.proto"
+    descriptor_path: "myco.users.User.email[protowire.schema.v1.validate#1]"
+  }
+}
+violations {
+  cause {
+    code: "protowire.required"
+    fallback_message: "field is required"
+  }
+  path {
+    segments { field_name: "phone" field_number: 2 }
+  }
+  # actual_value deliberately unset: the field is ABSENT.
+  source { file: "myco/users/user.proto" line: 36 column: 3 }
+  rule_kind: RULE_KIND_REQUIRED
+  source_ref {
+    file: "myco/users/user.proto"
+    descriptor_path: "myco.users.User.phone[protowire.schema.v1.required#0]"
+  }
+}
+violations {
+  cause {
+    code: "user.invalid_country"
+    fallback_message: "country not supported"
+  }
+  path {
+    segments { field_name: "country" field_number: 3 }
+  }
+  type_chain: "string"
+  actual_value { string_value: "DE" }
+  source { file: "myco/users/user.proto" line: 38 column: 3 }
+  rule_kind: RULE_KIND_VALIDATE
+  source_ref {
+    file: "myco/users/user.proto"
+    descriptor_path: "myco.users.User.country[protowire.schema.v1.validate#0]"
+  }
+}

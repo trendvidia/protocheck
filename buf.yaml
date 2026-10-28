@@ -1,0 +1,24 @@
+version: v2
+modules:
+  - path: proto
+    lint:
+      use:
+        - STANDARD
+      # The public protocheck schema is already published without a version
+      # suffix; renaming protocheck → protocheck.v1 would break every consumer
+      # that writes `(protocheck.field) = {...}`. Revisit at the next major
+      # rev if/when a v2 is needed.
+      except:
+        - PACKAGE_VERSION_SUFFIX
+  - path: internal/testpb
+    # Internal test fixtures, not an API. Use the minimal ruleset and skip
+    # conventions that would require restructuring the test layout.
+    lint:
+      use:
+        - MINIMAL
+      except:
+        - PACKAGE_DIRECTORY_MATCH
+        - PACKAGE_VERSION_SUFFIX
+breaking:
+  use:
+    - FILE

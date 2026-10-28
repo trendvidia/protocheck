@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: lint · format · test
+    # GitHub-hosted with stock Go: protocheck needs no private modules, so
+    # this is the build every contributor gets, and it is safe for fork PRs.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - run: go version
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Format + lint .proto
+        run: make check
+
+      - name: Verify generated code is committed
+        # Regenerates .pb.go via the remote BSR plugin and fails if anything
+        # changed. Catches contributors who edited .proto without running
+        # `make generate`.
+        run: |
+          make generate
+          if ! git diff --quiet -- '*.pb.go'; then
+            echo "::error::Generated .pb.go is out of date — run 'make generate' and commit the result."
+            git --no-pager diff -- '*.pb.go'
+            exit 1
+          fi
+
+      - run: go vet ./...
+
+      - name: Build
+        run: make build
+
+      - name: Test
+        run: go test -race -count=1 ./...
+
+      - name: Test protovalidate adapter (nested module)
+        working-directory: protovalidate
+        run: go test -race -count=1 ./...

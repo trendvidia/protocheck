@@ -1,0 +1,20 @@
+# proto-file: 15_collections_golden/inventory.proto
+# proto-message: fixtures.collections.Inventory
+#
+# Invalid Inventory instance the sibling golden Report was computed
+# from. One map entry violates on BOTH dimensions — its key fails the
+# Sku rule and its value fails the Quantity rule — pinning the §7
+# for_key disambiguation; the repeated field carries one invalid
+# element and one collection-level violation (3 elements > 2).
+
+stock {
+  key: "WID-0001"
+  value: 5
+}
+stock {
+  key: "XX"
+  value: -2
+}
+discontinued: "GAD-0002"
+discontinued: "YY"
+discontinued: "GAD-0003"
