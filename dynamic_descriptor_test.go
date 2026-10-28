@@ -63,7 +63,7 @@ func dynUser(t *testing.T) (protoreflect.Message, protoreflect.MessageDescriptor
 	return dynamicpb.NewMessage(md), md
 }
 
-// Regression for https://github.com/trendvidia/protocheck/issues/2: Validate
+// Regression: Validate
 // must not panic when descriptors carry *dynamicpb.Message extension values.
 // Before the fix, this scenario panicked inside ExtensionInfo.InterfaceOf.
 func TestValidate_DynamicDescriptors_InvalidMessage(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
-// Regression for https://github.com/trendvidia/protocheck/issues/2.
+// Regression test.
 //
 // When descriptors come from protocompile (or any other path that decodes
 // options without resolving extensions to their generated Go types), the

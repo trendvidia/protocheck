@@ -6,10 +6,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+The repository was re-created ahead of going public, with one squashed
+commit. Entries below no longer cite issue or pull-request numbers from
+before that point; links to other repositories are unchanged.
+
 ### Fixed
 
-- **`check` rules on message-typed fields are evaluated**
-  ([#68](https://github.com/trendvidia/protocheck/issues/68)). They were
+- **`check` rules on message-typed fields are evaluated**. They were
   skipped, so they always passed. Without an engine, `this` binds per
   RFC-001 §6.2 (a Timestamp as `time.Time`, a Duration as
   `time.Duration`, a wrapper as its unwrapped value, any other message as
@@ -17,12 +20,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   configured, the rule reports a violation naming the engine, because
   `EvalField` takes scalar values only; it no longer passes unevaluated.
 
-- **`values.check` on message-valued map fields is evaluated**
-  ([#73](https://github.com/trendvidia/protocheck/issues/73)). It was
+- **`values.check` on message-valued map fields is evaluated**. It was
   skipped, so it always passed. With an engine it goes to `EvalMessage`, as
   repeated message items already did.
 - **Repeated message items and map values bind `this` per RFC-001 §6.2**
-  in the built-in language (#73). A Timestamp, Duration or wrapper item was
+  in the built-in language. A Timestamp, Duration or wrapper item was
   bound as the raw message, so every comparison failed with an evaluation
   error (`cannot order *timestamppb.Timestamp against time.Time`); it now
   binds as `time.Time`, `time.Duration` or the unwrapped value. Other
@@ -40,9 +42,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   rule is a registered function taking the message. Source written for an
   engine's own language fails to parse and reports a violation; it never
   passes. A configured engine still evaluates every `check` expression.
-- **README rewritten around the built-in expression language**
-  ([#66](https://github.com/trendvidia/protocheck/issues/66)). It still
-  described protocheck as "powered by GoVM" and paired `protocheck.New()`
+- **README rewritten around the built-in expression language**. It still
+  described protocheck as powered by a specific engine and paired `protocheck.New()`
   with `check` rules that then failed. It now documents the expression
   language, cross-field rules through registered functions, plugging in
   another engine, CEL through protovalidate, and the buf managed-mode
@@ -63,7 +64,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **`now()` and temporal ordering in `@validate` rules** (#64). RFC-001
+- **`now()` and temporal ordering in `@validate` rules**. RFC-001
   §5.4 (trendvidia/protowire#282) made this engine's dialect the one
   normative expression language and added the `now()` §6.2 already
   promised. `now()` is a receiverless builtin bound once per `Validate`
@@ -131,7 +132,7 @@ The nested `protovalidate` module is unchanged and keeps its own tag.
 ### Added
 
 - Map KEY validation on the carrier path (RFC-001 §6.4 as amended by
-  protowire#141/#153; [#53](https://github.com/trendvidia/protocheck/issues/53)):
+  protowire#141/#153):
   key-type alias rules — carried by the §8 lowering on the synthetic
   entry's key field — now evaluate per entry key with `ForKey` set, the
   key type's own chain in `TypeChain`, and the entry's subscripted path
@@ -140,7 +141,7 @@ The nested `protovalidate` module is unchanged and keeps its own tag.
   the synthetic entry's field order; entries dispatch in sorted key
   order so reports are deterministic under protoreflect's randomized
   map iteration. Map-field carrier entries themselves stay
-  per-value-only (the #37 option-1 contract). Conformance fixture
+  per-value-only. Conformance fixture
   `15_collections_golden` is vendored and pinned by golden equality.
 - The nested `github.com/trendvidia/protocheck/protovalidate` module gets
   its first tag, `protovalidate/v0.1.0` — it was previously importable
@@ -150,7 +151,7 @@ The nested `protovalidate` module is unchanged and keeps its own tag.
 
 - `Report.Proto()` / `ReportFromProto` now carry `ForKey` and
   `SourceRef` (wire `for_key`, protocompile#116; wire `source_ref`,
-  protowire#142/#161 — [#58](https://github.com/trendvidia/protocheck/issues/58)):
+  protowire#142/#161):
   the two documented lossy edges are gone and the conversion is
   lossless in both directions. Requires protocompile ≥ v0.20.0
   bindings (pin bumped). The vendored fixture-07 golden gains the
@@ -174,21 +175,19 @@ The nested `protovalidate` module is unchanged and keeps its own tag.
 protocheck is now the engine-agnostic validation layer of RFC-001: the
 message walk, violation/report model, §9.1 engine SPI, §9.2 verification,
 and the carrier expression dialect stay here; engine-language expression
-evaluation is pluggable (§9.4). This release removes the govm dependency
-entirely, clearing the path to open-sourcing this module.
+evaluation is pluggable (§9.4). This release removes the expression
+engine dependency entirely, clearing the path to open-sourcing this module.
 
 > **Breaking (within v2):** `WithFunction` now accepts only §9.2 SPI
 > `Function`s, and protocheckpb Check expressions require a configured
 > engine. Kept a minor bump deliberately: the module is private and being
-> re-cut for open-sourcing; re-majoring to v3 was considered and skipped
-> ([#54](https://github.com/trendvidia/protocheck/pull/54)).
+> re-cut for open-sourcing; re-majoring to v3 was considered and skipped.
 
 ### Added
 
-- **`ExpressionEngine` seam + `WithExpressionEngine`**
-  ([#54](https://github.com/trendvidia/protocheck/pull/54)) — engines
-  implement `Info`/`EvalField`/`EvalMessage`/`Close`; the GoVM engine
-  moved to the private `github.com/trendvidia/protocheck-govm` module.
+- **`ExpressionEngine` seam + `WithExpressionEngine`** — engines
+  implement `Info`/`EvalField`/`EvalMessage`/`Close`; the previously
+  built-in engine moved out of this module.
   With no engine configured, structural and RFC-001 carrier rules still
   run; hitting a protocheckpb Check expression reports a violation naming
   the missing engine. Engine-free reports identify as `protocheck-go`.
@@ -198,30 +197,25 @@ entirely, clearing the path to open-sourcing this module.
   engine adapters live with the abstraction layer.
 - **MIT LICENSE** (same as protowire), at the repo root and copied into
   the protovalidate nested module (nested-module zips don't inherit the
-  root license) — the repository is public as of this release.
+  root license).
 
 ### Changed
 
 - `WithFunction` is SPI-only; engine-native reflective Go functions
   (`check.<name>(...)`) register on the engine
-  (`protocheckgovm.WithFunction`). The `goVMEngine` SPI facade — which
-  never touched govm — is renamed `spiEngine` internally.
-- CI authenticates private modules through the runner machine's static
-  SSH `insteadOf` rewrite; the per-run `git config --global` PAT writes
-  and the `TRENDVIDIA_MODULES_PAT` secret are gone
-  ([#55](https://github.com/trendvidia/protocheck/pull/55)).
+  instead. The engine-specific SPI facade is renamed `spiEngine`
+  internally.
 
 ### Removed
 
-- The `github.com/trendvidia/govm/v2` dependency (and its transitive
-  closure) from this module's graph.
+- The expression engine dependency (and its transitive closure) from this
+  module's graph.
 
 ## [2.2.0] - 2026-07-24
 
 ### Added
 
-- **`ReportFromProto`** — the wire → Go half of the report conversion
-  ([#46](https://github.com/trendvidia/protocheck/issues/46)),
+- **`ReportFromProto`** — the wire → Go half of the report conversion,
   completing the round trip: `Proto ∘ ReportFromProto` is the identity
   on wire Reports (property-tested over every `Value` kind, subscript
   type, and rule kind, plus the vendored conformance golden). New
@@ -234,7 +228,7 @@ entirely, clearing the path to open-sourcing this module.
 
 ## [2.1.0] - 2026-07-24
 
-The v2.1 follow-up batch (protocheck issues #31–#34, plan on #34) plus the
+The v2.1 follow-up batch plus the
 protowire-go decoder seam: per-element collection rules, `@sensitive`
 redaction, `RULE_KIND_DEFAULT`, and wire-report emission with fixture-07
 cross-port golden conformance.
@@ -242,7 +236,7 @@ cross-port golden conformance.
 ### Added
 
 - **Wire-report conversion + fixture-07 golden conformance** (RFC-001
-  goal 5, [#34](https://github.com/trendvidia/protocheck/issues/34)).
+  goal 5).
   `Report.Proto()` renders the `protowire.schema.v1.Report` wire message
   (protocompile's generated bindings) — the shape gRPC adapters embed in
   `google.rpc.Status.details` (§6.6 rule 6). The §5.3 worked-example
@@ -260,7 +254,7 @@ cross-port golden conformance.
   `EnrichedViolation.ForKey` is not yet converted — the generated
   bindings predate wire `for_key` (protocompile#116).
 - **`RULE_KIND_DEFAULT` emission** (RFC-001 §6.4 as pinned by
-  protowire#133, [#32](https://github.com/trendvidia/protocheck/issues/32)):
+  protowire#133):
   violations from rules evaluated against a `@default`-substituted value
   now carry `RuleKindDefault`, superseding the rule's own
   `VALIDATE`/`TYPE_REFINEMENT` kind — marking a schema-authoring error
@@ -268,8 +262,7 @@ cross-port golden conformance.
   carries the substituted default; rule origin stays recoverable from
   `Cause.Code` and `TypeChain`.
 
-- **`@sensitive` redaction** (RFC-001 §6.7,
-  [#33](https://github.com/trendvidia/protocheck/issues/33)). Violations
+- **`@sensitive` redaction** (RFC-001 §6.7). Violations
   on fields classified `@sensitive` withhold the offending value:
   `EnrichedViolation.ActualValue` stays nil and the new `ValueRedacted`
   (wire `value_redacted`) is set, distinguishing redaction from genuine
@@ -282,8 +275,7 @@ cross-port golden conformance.
   treated as sensitive everywhere (the safe over-approximation).
 
 - **`protowire` adapter package**
-  ([#36](https://github.com/trendvidia/protocheck/issues/36),
-  [protowire-go#49](https://github.com/trendvidia/protowire-go/issues/49)
+  ([protowire-go#49](https://github.com/trendvidia/protowire-go/issues/49)
   Phase 3): adapts the engine to protowire-go's `check.Validator` seam
   so the pxf / pb / sbe decoders run RFC-001 validation post-decode.
   `New(...)` passes options through to `protocheck.New`; `Wrap(...)`
@@ -293,8 +285,7 @@ cross-port golden conformance.
   entry path with a `map key: ` message prefix. Engine failures and
   non-proto values propagate as engine errors, never `*check.Error`.
   protowire-go bumped to a post-seam pseudo-version (v1.3.1-0.2026…).
-- **Carrier rules on repeated and map fields** (RFC-001 §6.4,
-  [#31](https://github.com/trendvidia/protocheck/issues/31)).
+- **Carrier rules on repeated and map fields** (RFC-001 §6.4).
   Alias-expanded `@validate` rules on a collection field now apply **per
   element** — `this` binds to each element, violations carry subscripted
   paths (`emails[1]`, key subscripts on keyed lists), `TYPE_REFINEMENT`
@@ -339,14 +330,12 @@ cross-port golden conformance.
 
 ## [2.0.0] - 2026-07-24
 
-The RFC-001 schema-extensions release (protocheck issues #8, #9, #10,
-#12, #13, #11): the clean-break v2 with the wire-aligned violation model,
+The RFC-001 schema-extensions release: the clean-break v2 with the wire-aligned violation model,
 the engine SPI, carrier-rule validation, and catalog-based i18n.
 
 ### Changed
 
-- **BREAKING: wire-aligned violation model** (RFC-001 §7,
-  [#10](https://github.com/trendvidia/protocheck/issues/10)). The Go
+- **BREAKING: wire-aligned violation model** (RFC-001 §7). The Go
   `Violation{FieldPath, ConstraintID, Message}` is replaced by the shapes
   pinned in protowire's `proto/schema/v1/report.proto`: `Violation` is now
   the engine-independent cause — `Code`, `Params` (structured, for
@@ -368,26 +357,21 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
   `FallbackMessage`.
 
 - **Module path is now `github.com/trendvidia/protocheck/v2`** — the
-  RFC-001 M4 chain ([#8](https://github.com/trendvidia/protocheck/issues/8),
-  [#9](https://github.com/trendvidia/protocheck/issues/9),
-  [#10](https://github.com/trendvidia/protocheck/issues/10)) lands as a
+  RFC-001 M4 chain lands as a
   clean-break v2.0.0. v2 development happens on `main` with the `/v2`
   module suffix; v1 consumers are unaffected until they opt in with
   `go get github.com/trendvidia/protocheck/v2`.
 
-- **Expression evaluation is ~12–15× faster** with ~60× less allocation
-  ([#18](https://github.com/trendvidia/protocheck/issues/18)). Expression
+- **Expression evaluation is ~12–15× faster** with ~60× less allocation. Expression
   rules now evaluate on a bounded per-Env `eval.EvalPool` (VM reuse) instead
   of constructing a fresh VM — with full stdlib re-registration — per
   evaluation: ~194µs/712KB → ~13–16µs/12KB per Validate on the benchmark
   fixtures. Standard rules are unaffected. (Compiled programs were already
-  cached inside govm's `Env.Compile`, so the recompilation suspected in #18
-  was not actually occurring; per-eval VM construction was the real cost.)
+  cached by the engine, so recompilation was not actually occurring; per-eval VM construction was the real cost.)
 
 ### Added
 
-- **Catalog support + i18n** (RFC-001 §7,
-  [#11](https://github.com/trendvidia/protocheck/issues/11)), completing
+- **Catalog support + i18n** (RFC-001 §7), completing
   the protocheck side of the RFC-001 schema-extensions chain.
   `NewMapCatalog(entries)` is the in-memory reference `Catalog`: entries
   keyed by violation code, message templates with `{param}` placeholders
@@ -398,8 +382,7 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
   and duplicate-locale checks. `Report.Format(locale)` renders through
   the locale's catalog with per-violation fallback on any miss (unknown
   locale or missing code).
-- **Constraints over keyed repeated fields** (protowire#116,
-  [#13](https://github.com/trendvidia/protocheck/issues/13)). Elements of
+- **Constraints over keyed repeated fields** (protowire#116). Elements of
   a `repeated <Message>` field carrying a valid `(pxf.key)` annotation
   are addressed by their key value — `endpoints[admin].url` instead of
   `endpoints[1].url`, matching the entry name in PXF sources — with an
@@ -411,8 +394,7 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
   scope. Keyed-ness resolves through `pxf.KeyField` from protowire-go
   (now a direct dependency, v1.3.0).
 
-- **RFC-001 carrier-rule validation** (§6.4/§8,
-  [#10](https://github.com/trendvidia/protocheck/issues/10)): messages whose
+- **RFC-001 carrier-rule validation** (§6.4/§8): messages whose
   descriptors carry lowered `protowire.schema.v1` annotations (extension
   50400) are now validated against them — `@required` (code
   `protowire.required`), `@default` substitution (rules evaluate against
@@ -433,10 +415,8 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
   `TYPE_REFINEMENT`/`REQUIRED` emission, `ActualValue` capture, `Source`
   (from the embedded source map, carrier 50404), and `SourceRef` — the
   `(file, descriptor_path)` key of the rule in the canonical RFC-001
-  §8.3.1 grammar, produced via `fdp.DescriptorPath`
-  ([#12](https://github.com/trendvidia/protocheck/issues/12)).
-- **Function registration + init-time verification** (RFC-001 §9.2,
-  [#9](https://github.com/trendvidia/protocheck/issues/9)).
+  §8.3.1 grammar, produced via `fdp.DescriptorPath`.
+- **Function registration + init-time verification** (RFC-001 §9.2).
   `WithDescriptors(files...)` makes `New` walk the supplied schemas and
   reconcile every function FQN they declare (carrier 50401) or call from a
   lowered annotation expression (carrier 50400, `Expression.calls`) against
@@ -450,19 +430,16 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
   `github.com/trendvidia/protocompile` (the `protowire.schema.v1` carrier
   bindings; linking them also lets in-process descriptor unmarshals resolve
   extensions 50400–50404).
-- **Engine SPI** (RFC-001 §9.1,
-  [#8](https://github.com/trendvidia/protocheck/issues/8)): `Engine`,
+- **Engine SPI** (RFC-001 §9.1): `Engine`,
   `Function`, `Catalog`, and `Report` — the implementation-neutral contract
   between schema-extension tooling and a validation engine, mirroring the
   wire shape pinned in protowire's `proto/schema/v1/report.proto`
   (`ExecutionMode`, `EngineInfo`, `Truncated`, `WallTimeNanos`).
   `Validator.Engine()` returns the SPI view backed by the existing
-  GoVM-based validator; `protocheck.New(...)` and direct `*Validator` use
+  validator; `protocheck.New(...)` and direct `*Validator` use
   are unchanged. Functions registered via `Engine.Register` are recorded
-  for the descriptor-declared binding landing with
-  [#9](https://github.com/trendvidia/protocheck/issues/9).
-- **`WithFailFast()`** — opt-in fail-fast validation (RFC-001 §6.4, part of
-  [#10](https://github.com/trendvidia/protocheck/issues/10)). Validate stops
+  for the descriptor-declared function binding.
+- **`WithFailFast()`** — opt-in fail-fast validation (RFC-001 §6.4). Validate stops
   at the first violation and reports exactly one; the message walk
   short-circuits, skipping remaining rules, nested messages, and repeated/map
   elements. The default remains collect-all.
@@ -484,12 +461,11 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
   built without this process's extension registry — a
   `FileDescriptorSet` compiled by an external toolchain, or
   `FileDescriptorProto`s assembled programmatically.
-- **uint64/fixed64 fields no longer wrap negative in expression bindings**
-  ([#17](https://github.com/trendvidia/protocheck/issues/17)). Unsigned fields
+- **uint64/fixed64 fields no longer wrap negative in expression bindings**. Unsigned fields
   were narrowed through `int` before binding, so a value above `MaxInt64`
   wrapped negative and a range expression like `this < 1000` wrongly passed
   for `18446744073709551615`. Unsigned kinds now bind as `eval.Uint`
-  (govm v2.11.0, trendvidia/govm#765) and reach expressions — and
+  (an expression engine upgrade) and reach expressions — and
   `WithFunction` customs with unsigned parameters — unnarrowed. Standard
   numeric rules were always correct and are unchanged.
 - **`WithFunction` customs with narrow numeric parameters (`int32`,
@@ -499,24 +475,22 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
 
 ### Changed
 
-- govm upgraded v2.10.0 → v2.11.0 (adds `eval.Uint`).
-- **govm upgraded v2.2.1 → v2.10.0.** The `eval` package — protocheck's
-  integration surface — is unchanged across the range; the one breaking change
-  in v2.10.0 (sandbox-by-default, govm #702) applies only to the govm CLI
-  commands, so validation behavior is unaffected. Transitive bumps:
+- Expression engine upgraded (adds `eval.Uint`).
+- **Expression engine upgraded.** protocheck's integration surface is
+  unchanged across the range, and the one breaking change applies only to
+  the engine's command-line tools, so validation behavior is unaffected.
+  Transitive bumps:
   protowire-go v1.2.2, x/crypto v0.51.0, x/net v0.55.0, x/sys v0.45.0.
 - **`WithFunction` natives now convert values through the calling VM's own
-  handle table** (the VM-scoped API from govm #659), making custom functions
+  handle table**, making custom functions
   safe by construction when multiple eval VMs execute concurrently in one
-  process. Covered by a new concurrent-validators race test. Closes
-  [#15](https://github.com/trendvidia/protocheck/issues/15).
+  process. Covered by a new concurrent-validators race test.
 
 ## [1.2.0] - 2026-07-01
 
 ### Changed
 
-- **Migrated to the `github.com/trendvidia/govm/v2` import path**, moving off
-  govm v1.0.1 to v2.2.1 ([#5](https://github.com/trendvidia/protocheck/pull/5)).
+- **Moved to the expression engine's v2 import path.**
   No protocheck API changes; validation behavior is unchanged.
 
 ## [1.1.0] - 2026-06-04
@@ -528,7 +502,6 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
   `bytes.Equal`.
 - **End-to-end test for protocompile-shaped descriptors** (`Validate` against
   `dynamicpb.NewMessage` whose option extensions are `*dynamicpb.Message`).
-  Closes [#2](https://github.com/trendvidia/protocheck/issues/2).
 - **Test backfill**: bytes rules, untested string rules (`const`, `len`,
   `len_bytes`, `min_bytes`, `max_bytes`, `prefix`, `suffix`, `contains`,
   `not_contains`, `uri_ref`), numeric rules across `float`/`double`/`int32`/
@@ -552,8 +525,7 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
 - **`Validate` no longer panics on dynamicpb-shaped descriptors.** Extension
   reads use `protoreflect` directly instead of `proto.GetExtension`, falling
   back to marshal + unmarshal into the concrete type when the stored value is
-  `*dynamicpb.Message`. Closes
-  [#2](https://github.com/trendvidia/protocheck/issues/2).
+  `*dynamicpb.Message`.
 
 ### Changed
 
@@ -566,7 +538,7 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
 
 ## [1.0.1] - 2026-06-03
 
-- Bump govm to v1.0.1 for protowire-go migration.
+- Expression engine bumped for the protowire-go migration.
 
 ## [1.0.0] - 2026-04-21
 
