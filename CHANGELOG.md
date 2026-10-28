@@ -4,7 +4,7 @@ All notable changes to protocheck are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.7.0] - 2026-10-28
 
 The repository was re-created ahead of going public, with one squashed
 commit. Entries below no longer cite issue or pull-request numbers from
@@ -58,7 +58,7 @@ before that point; links to other repositories are unchanged.
   protowire-go v1.3.1 → v1.10.0. protowire-go v1.10.0 requires a 2024
   build of the protovalidate Go bindings that protovalidate v1.2.0 cannot
   compile against (`undefined: validate.FieldPath`); v1.4.0 requires a
-  newer build, which wins. Released under its own `protovalidate/v0.x` tag.
+  newer build, which wins. Released under its own `protovalidate/v0.2.0` tag.
 
 ## [2.6.0] - 2026-09-07
 
