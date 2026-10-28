@@ -32,6 +32,11 @@ before that point; links to other repositories are unchanged.
 
 ### Changed
 
+- **`protocheck.proto` is published on the BSR** as
+  [`buf.build/trendvidia/protocheck`](https://buf.build/trendvidia/protocheck),
+  labelled with each release tag. The README now shows a `deps` entry
+  instead of vendoring the file, and the managed-mode rule that keeps
+  generated code importing `protocheckpb`.
 - **`check` expressions work without an expression engine.** With no
   `WithExpressionEngine`, a protocheckpb `check` rule used to report
   `no expression engine configured`. It is now evaluated in the RFC-001

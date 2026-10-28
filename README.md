@@ -49,48 +49,52 @@ go get github.com/trendvidia/protocheck/v2
 
 Make `protocheck.proto` available to your codegen toolchain.
 
-With **buf**, vendor the file into your workspace (there is no BSR module
-yet):
-
-```bash
-cp path/to/protocheck/proto/protocheck/protocheck.proto \
-   proto/protocheck/protocheck.proto
-```
-
-If `buf.gen.yaml` uses managed mode with `go_package_prefix`, the
-vendored file is rewritten under *your* import path, and your generated
-code then imports a `protocheck` package that does not exist. Point it
-back at `protocheckpb`, and keep buf from generating it:
+With **buf**, depend on the
+[BSR module](https://buf.build/trendvidia/protocheck):
 
 ```yaml
+# buf.yaml
+version: v2
+deps:
+  - buf.build/trendvidia/protocheck
+```
+
+Your generated code must import protocheck's own Go package,
+`github.com/trendvidia/protocheck/v2/protocheckpb`. Never generate Go code
+for `protocheck.proto` yourself: a second copy registers the same
+extensions twice. `buf generate` leaves dependencies alone by default, but
+managed mode's `go_package_prefix` also rewrites the import path of
+dependencies. Disable it for this module:
+
+```yaml
+# buf.gen.yaml
 version: v2
 managed:
   enabled: true
   override:
     - file_option: go_package_prefix
       value: example.com/acme/gen/go
-    # Must come AFTER go_package_prefix: the later override wins.
+  disable:
     - file_option: go_package
-      path: protocheck/protocheck.proto
-      value: github.com/trendvidia/protocheck/v2/protocheckpb
+      module: buf.build/trendvidia/protocheck
 plugins:
-  - local: protoc-gen-go
+  - remote: buf.build/protocolbuffers/go
     out: gen/go
     opt: paths=source_relative
-inputs:
-  - directory: proto
-    exclude_paths:
-      - proto/protocheck
 ```
 
-With the two overrides in the other order, the generated `.pb.go` files
-import `example.com/acme/gen/go/protocheck` and `go build` fails with
+Without the `disable` entry, the generated `.pb.go` files import
+`example.com/acme/gen/go/protocheck` and `go build` fails with
 "no required module provides package".
+
+Each protocheck release is pushed to the BSR under its version tag (for
+example `buf.build/trendvidia/protocheck:v2.7.0`). Pin the same version
+you `go get`.
 
 The extension numbers in `protocheck.proto` changed in v2.5.0. A schema
 generated against an older copy still compiles but its constraints are no
-longer found, so validation silently passes. Re-vendor the file and
-regenerate whenever you upgrade across that release.
+longer found, so validation silently passes. Regenerate whenever you
+upgrade across that release.
 
 With **protoc**:
 
