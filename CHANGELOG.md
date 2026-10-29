@@ -8,6 +8,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Dependencies**: protocompile v0.35.1 → v0.36.0, which records enum
+  value names in `Expression.enum_values` and checks expression defaults
+  and boolean rules (trendvidia/protocompile#275, #286). Adds
+  trendvidia/protos v0.1.1 as an indirect dependency.
+
 - **A failed `@validate` rule reports an enum value by name** (#11).
   `ActualValue` was the value's number; it is now an `EnumName` holding
   the enum-qualified name (`"t.Mode.MODE_MATCH"`), which converts to the
