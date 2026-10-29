@@ -35,6 +35,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // compiledExpr is a parsed rule expression, ready for repeated evaluation.
@@ -63,9 +65,15 @@ type exprNode interface {
 // ─── Compilation ────────────────────────────────────────────────────────────
 
 // compileExpr parses src. calls maps a callee's local spelling (its FQN's
-// trailing segments) to the declared-function FQN, from Expression.calls.
-func compileExpr(src string, calls map[string]string) (*compiledExpr, error) {
-	return parseExpr(src, &exprParser{lex: newExprLexer(src), calls: calls})
+// trailing segments) to the declared-function FQN, from Expression.calls;
+// enums maps an enum value reference's spelling to its number, from
+// Expression.enum_values.
+func compileExpr(src string, calls map[string]string, enums map[string]int32) (*compiledExpr, error) {
+	refs := make(map[string]enumValue, len(enums))
+	for spelling, n := range enums {
+		refs[spelling] = enumValue{num: int64(n), declared: true}
+	}
+	return parseExpr(src, &exprParser{lex: newExprLexer(src), calls: calls, enums: refs})
 }
 
 // compileCheckExpr parses a protocheckpb Check expression in the §5.4
@@ -214,6 +222,10 @@ type exprParser struct {
 	tok   token
 	err   error
 	calls map[string]string
+	// enums maps each enum value reference's spelling to the value the
+	// compiler resolved it to (Expression.enum_values, RFC-001 §8.1).
+	// The engine never resolves a name itself.
+	enums map[string]enumValue
 	// exact limits callee resolution to calls' own keys. Check
 	// expressions resolve against the whole function registry, where a
 	// loose suffix scan could pick between same-named functions
@@ -407,6 +419,17 @@ func (p *exprParser) parseTerm() (exprNode, error) {
 			}
 			name += "." + p.tok.text
 			p.next()
+		}
+		if !(p.tok.kind == tokPunct && p.tok.text == "(") {
+			// An enum value reference (§5.4 enumref).
+			if name == "in" {
+				return nil, fmt.Errorf("expected an expression, got 'in'")
+			}
+			ev, ok := p.enums[name]
+			if !ok {
+				return nil, fmt.Errorf("%q is not an enum value the compiler resolved for this expression (Expression.enum_values)", name)
+			}
+			return &literalNode{val: ev}, p.err
 		}
 		args, err := p.parseArgs()
 		if err != nil {
@@ -608,7 +631,7 @@ func (n *callNode) eval(env *exprEnv) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		args[i] = v
+		args[i] = unwrapEnum(v)
 	}
 	ok, viol := env.call(n.fqn, args)
 	if !ok && viol != nil {
@@ -643,7 +666,7 @@ func (n *methodNode) eval(env *exprEnv) (any, error) {
 // — `matches(this, p)` is `this.matches(p)` with the receiver first.
 func isBuiltinFunc(name string) bool {
 	switch name {
-	case "size", "starts_with", "ends_with", "contains", "matches", "is_nan":
+	case "size", "starts_with", "ends_with", "contains", "matches", "is_nan", "defined", "unique":
 		return true
 	}
 	return false
@@ -679,6 +702,35 @@ func evalBuiltinMethod(recv any, method string, args []any) (any, error) {
 		default:
 			return nil, fmt.Errorf("size is not defined on %T", recv)
 		}
+	case "defined":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("defined expects no arguments, got %d", len(args))
+		}
+		ev, ok := recv.(enumValue)
+		if !ok {
+			return nil, fmt.Errorf("defined is not defined on %T: it needs an enum value", recv)
+		}
+		return ev.defined(), nil
+	case "unique":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("unique expects no arguments, got %d", len(args))
+		}
+		list, ok := recv.([]any)
+		if !ok {
+			return nil, fmt.Errorf("unique is not defined on %T", recv)
+		}
+		for i := range list {
+			for j := i + 1; j < len(list); j++ {
+				eq, err := valuesEqual(list[i], list[j])
+				if err != nil {
+					return nil, fmt.Errorf("unique: %w", err)
+				}
+				if eq {
+					return false, nil
+				}
+			}
+		}
+		return true, nil
 	case "is_nan":
 		if len(args) != 0 {
 			return nil, fmt.Errorf("is_nan expects no arguments, got %d", len(args))
@@ -718,11 +770,38 @@ func evalBuiltinMethod(recv any, method string, args []any) (any, error) {
 
 // ─── Value semantics ────────────────────────────────────────────────────────
 
+// enumValue is an enum value as the language sees it (RFC-001 §6.2 rule
+// 6): its number, which every operator compares, and its enum type,
+// which only defined() reads. A `this` bound from an enum field, element
+// or map value carries the descriptor; an enum value reference, which
+// the compiler resolved to a declared value, carries declared instead.
+type enumValue struct {
+	num      int64
+	enum     protoreflect.EnumDescriptor
+	declared bool
+}
+
+func (e enumValue) defined() bool {
+	if e.enum == nil {
+		return e.declared
+	}
+	return e.enum.Values().ByNumber(protoreflect.EnumNumber(e.num)) != nil
+}
+
+// unwrapEnum turns an enum value back into the plain int an enum has
+// always bound as, for declared functions and for reported values.
+func unwrapEnum(v any) any {
+	if e, ok := v.(enumValue); ok {
+		return int(e.num)
+	}
+	return v
+}
+
 // isNumber reports whether v is one of the numeric kinds `this` and
-// literals bind as: int, int64, uint64 or float64.
+// literals bind as: int, int64, uint64, float64, or an enum value.
 func isNumber(v any) bool {
 	switch v.(type) {
-	case int, int64, uint64, float64:
+	case int, int64, uint64, float64, enumValue:
 		return true
 	}
 	return false
@@ -734,11 +813,17 @@ func isNumber(v any) bool {
 // round, so 2^53 and 2^53+1 compared equal. ordered is false when either
 // is a NaN. Both operands must satisfy isNumber.
 func compareNumbers(a, b any) (c int, ordered bool) {
-	if v, ok := a.(int); ok {
+	switch v := a.(type) {
+	case int:
 		a = int64(v)
+	case enumValue:
+		a = v.num
 	}
-	if v, ok := b.(int); ok {
+	switch v := b.(type) {
+	case int:
 		b = int64(v)
+	case enumValue:
+		b = v.num
 	}
 	switch av := a.(type) {
 	case int64:

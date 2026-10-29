@@ -325,6 +325,9 @@ func (b *indexBuilder) indexField(fd protoreflect.FieldDescriptor, smFile string
 			if err != nil {
 				return nil, fmt.Errorf("field %s: @default: %w", fd.FullName(), err)
 			}
+			if n, ok := val.(int); ok && fd.Kind() == protoreflect.EnumKind {
+				val = enumValue{num: int64(n), enum: fd.Enum()}
+			}
 			fr.defaultValue = val
 			fr.hasDefault = true
 
@@ -408,7 +411,11 @@ func (b *indexBuilder) buildValidateRule(ann *schemav1.Annotation, element strin
 			calls[fqn[dot+1:]] = fqn
 		}
 	}
-	compiled, err := compileExpr(expr.GetSource(), calls)
+	enums := make(map[string]int32, len(expr.GetEnumValues()))
+	for _, ev := range expr.GetEnumValues() {
+		enums[ev.GetSpelling()] = ev.GetValue().GetNumber()
+	}
+	compiled, err := compileExpr(expr.GetSource(), calls, enums)
 	if err != nil {
 		return nil, err
 	}

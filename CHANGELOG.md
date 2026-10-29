@@ -26,6 +26,18 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Enum value names, `defined()` and `unique()` in `@validate` rules**
+  (#11, RFC-001 §5.4 as amended by trendvidia/protowire#432). A rule can
+  name an enum value (`this in [MODE_MATCH, Mode.MODE_REGULATE]`); the
+  engine takes its number from `Expression.enum_values`, which the
+  compiler records (trendvidia/protocompile#275), and never resolves a
+  name itself. `defined()` is true when an enum value is declared in its
+  enum, and `unique()` when no two list elements are equal under `==`.
+  Both agree with the bracket rules `enum.defined_only` and
+  `repeated.unique` on the same inputs. An enum still binds as its
+  number for every operator, for declared functions and in
+  `ActualValue`.
+
 - **`is_nan()` builtin** (#9, RFC-001 §5.4), in method and function form:
   true for a floating-point NaN, false for every other number. A negated
   ordering such as `!(this < 0.0)` still accepts NaN, so
