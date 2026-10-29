@@ -9,9 +9,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - **Dependencies**: protowire-go v1.5.0 → v1.12.0 (protovalidate adapter
-  module: v1.10.0 → v1.12.0). This raises protocompile to v0.34.0 and
-  google.golang.org/protobuf to v1.36.12, the versions protowire-go
-  v1.12.0 requires.
+  module: v1.10.0 → v1.12.0), protocompile v0.20.0 → v0.35.1, and
+  google.golang.org/protobuf v1.36.11 → v1.36.12.
 
 ## [2.7.0] - 2026-10-28
 
