@@ -2,6 +2,7 @@ package protocheck
 
 import (
 	"context"
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -231,5 +232,136 @@ message Window {
 	}
 	if av, ok := got[0].ActualValue.(time.Time); !ok || !av.Equal(runInstant) {
 		t.Errorf("ActualValue = %v (%T), want the bound time.Time", got[0].ActualValue, got[0].ActualValue)
+	}
+}
+
+// A NaN is unordered (RFC-001 §5.4, IEEE 754, #9): every ordering with a
+// NaN on either side is false, == is false and != is true, and none is an
+// evaluation error. The left and right cases differ because compareValues
+// sees the operands in source order.
+func TestExprNaNComparisons(t *testing.T) {
+	nan := math.NaN()
+	cases := []struct {
+		src  string
+		want bool
+	}{
+		{`this < 1.0`, false},
+		{`this <= 1.0`, false},
+		{`this > 1.0`, false},
+		{`this >= 1.0`, false},
+		{`this == 1.0`, false},
+		{`this != 1.0`, true},
+		{`1.0 < this`, false},
+		{`1.0 <= this`, false},
+		{`1.0 > this`, false},
+		{`1.0 >= this`, false},
+		{`1.0 == this`, false},
+		{`1.0 != this`, true},
+		{`this < 1`, false},  // an integer on the other side
+		{`1 >= this`, false}, // and on the left
+		{`this < this`, false},
+		{`this <= this`, false},
+		{`this == this`, false},
+		{`this != this`, true},
+		{`this in [1.0, 2.0]`, false},
+		// The range shapes from #9 refuse NaN; a negated ordering accepts it,
+		// which is what is_nan() is for.
+		{`this >= 0.0 && this <= 1.0`, false},
+		{`this >= 40.0 && this <= 220.0`, false},
+		{`!(this < 0.0)`, true},
+		{`!this.is_nan() && !(this < 0.0)`, false},
+	}
+	for _, tc := range cases {
+		ok, err := evalExpr(t, tc.src, nan, runInstant)
+		if err != nil || ok != tc.want {
+			t.Errorf("NaN: %s = (%v, %v), want (%v, nil)", tc.src, ok, err, tc.want)
+		}
+	}
+
+	// Infinities stay ordinary ordered values.
+	inf := math.Inf(1)
+	for src, want := range map[string]bool{
+		`this > 1.0`:                 true,
+		`this >= this`:               true,
+		`this >= 0.0 && this <= 1.0`: false,
+		`this.is_nan()`:              false,
+	} {
+		if ok, err := evalExpr(t, src, inf, runInstant); err != nil || ok != want {
+			t.Errorf("+Inf: %s = (%v, %v), want (%v, nil)", src, ok, err, want)
+		}
+	}
+}
+
+// is_nan() in both forms: true only for a floating-point NaN, false for
+// every other number, integers included, and an error on anything else.
+func TestExprIsNaN(t *testing.T) {
+	for _, tc := range []struct {
+		this any
+		want bool
+	}{
+		{math.NaN(), true},
+		{1.5, false},
+		{math.Inf(-1), false},
+		{int64(0), false},
+		{int(7), false},
+		{uint64(7), false},
+	} {
+		for _, src := range []string{`this.is_nan()`, `is_nan(this)`} {
+			if ok, err := evalExpr(t, src, tc.this, runInstant); err != nil || ok != tc.want {
+				t.Errorf("%s with this = %v (%T): got (%v, %v), want (%v, nil)", src, tc.this, tc.this, ok, err, tc.want)
+			}
+		}
+	}
+	if _, err := evalExpr(t, `this.is_nan()`, "x", runInstant); err == nil || !strings.Contains(err.Error(), "is_nan is not defined on string") {
+		t.Errorf("is_nan on a string: want an evaluation error, got %v", err)
+	}
+	if _, err := evalExpr(t, `this.is_nan(1)`, 1.5, runInstant); err == nil || !strings.Contains(err.Error(), "is_nan expects no arguments") {
+		t.Errorf("is_nan with an argument: want an arity error, got %v", err)
+	}
+	if _, err := compileExpr(`is_nan()`, nil); err == nil {
+		t.Error("is_nan() in function form with no receiver: want a compile error")
+	}
+}
+
+// The rule from #9 on a real float field, through the carrier path: NaN
+// is refused with the rule's own code, as 1.5 and +Inf already were.
+func TestNaNRefusedByRangeRule(t *testing.T) {
+	fd := compileInline(t, "t.proto", `syntax = "proto3";
+package t;
+
+import "protowire/schema/v1/annotations.proto";
+
+message Descriptor {
+  float energy = 1
+    @validate(this >= 0.0 && this <= 1.0, code = "descriptor.energy.range");
+}
+`)
+	v, err := New(WithDescriptors(fd))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+
+	md := fd.Messages().ByName("Descriptor")
+	energy := md.Fields().ByName("energy")
+	for _, tc := range []struct {
+		val     float32
+		refused bool
+	}{
+		{0.5, false},
+		{1.5, true},
+		{float32(math.Inf(1)), true},
+		{float32(math.NaN()), true},
+	} {
+		msg := dynamicpb.NewMessage(md)
+		msg.Set(energy, protoreflect.ValueOfFloat32(tc.val))
+		got := v.validate(runInstant, nil, msg)
+		if refused := len(got) > 0; refused != tc.refused {
+			t.Errorf("energy = %v: refused = %v, want %v (%v)", tc.val, refused, tc.refused, got)
+			continue
+		}
+		if tc.refused && got[0].Cause.Code != "descriptor.energy.range" {
+			t.Errorf("energy = %v: code %q, want the rule's own", tc.val, got[0].Cause.Code)
+		}
 	}
 }

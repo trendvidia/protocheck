@@ -21,14 +21,16 @@ package protocheck
 // §8.1) and dispatch to the RFC-001 §9.2 registry — including Unimplemented
 // placeholders, whose returned violation propagates as the failure cause.
 // Builtins on values, in method form and in function form with the receiver
-// first: size, starts_with, ends_with, contains, matches. now() has no
+// first: size, starts_with, ends_with, contains, matches, is_nan. now() has no
 // receiver and yields the run's instant — the same for every rule evaluated
 // in one Validate call (§6.2 rule 5). Temporal values (§6.2 rule 2: a
 // Timestamp binds as time.Time, a Duration as time.Duration) compare with
-// their own kind only.
+// their own kind only. A NaN follows IEEE 754 (#9): every ordering with it
+// is false, == false and != true.
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -573,9 +575,13 @@ func (n *binaryNode) eval(env *exprEnv) (any, error) {
 		eq, err := valuesEqual(l, r)
 		return !eq, err
 	default: // < <= > >=
-		c, err := compareValues(l, r)
+		c, ordered, err := compareValues(l, r)
 		if err != nil {
 			return nil, err
+		}
+		if !ordered {
+			// A NaN is unordered: every ordering is false (§5.4, IEEE 754).
+			return false, nil
 		}
 		switch n.op {
 		case "<":
@@ -637,7 +643,7 @@ func (n *methodNode) eval(env *exprEnv) (any, error) {
 // — `matches(this, p)` is `this.matches(p)` with the receiver first.
 func isBuiltinFunc(name string) bool {
 	switch name {
-	case "size", "starts_with", "ends_with", "contains", "matches":
+	case "size", "starts_with", "ends_with", "contains", "matches", "is_nan":
 		return true
 	}
 	return false
@@ -673,6 +679,15 @@ func evalBuiltinMethod(recv any, method string, args []any) (any, error) {
 		default:
 			return nil, fmt.Errorf("size is not defined on %T", recv)
 		}
+	case "is_nan":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("is_nan expects no arguments, got %d", len(args))
+		}
+		if _, ok := numeric(recv); !ok {
+			return nil, fmt.Errorf("is_nan is not defined on %T", recv)
+		}
+		f, isFloat := recv.(float64)
+		return isFloat && math.IsNaN(f), nil
 	case "starts_with", "ends_with", "contains", "matches":
 		s, ok := recv.(string)
 		if !ok {
@@ -801,30 +816,34 @@ func valuesEqual(a, b any) (bool, error) {
 	}
 }
 
-func compareValues(a, b any) (int, error) {
+// compareValues orders a against b. ordered is false when either is a
+// NaN, which compares neither below, above nor equal to anything.
+func compareValues(a, b any) (c int, ordered bool, err error) {
 	if c, ok, err := temporalCompare(a, b); ok {
-		return c, err
+		return c, true, err
 	}
 	if fa, ok := numeric(a); ok {
 		fb, ok := numeric(b)
 		if !ok {
-			return 0, fmt.Errorf("cannot order %T against %T", a, b)
+			return 0, false, fmt.Errorf("cannot order %T against %T", a, b)
 		}
 		switch {
 		case fa < fb:
-			return -1, nil
+			return -1, true, nil
 		case fa > fb:
-			return 1, nil
+			return 1, true, nil
+		case fa == fb:
+			return 0, true, nil
 		default:
-			return 0, nil
+			return 0, false, nil
 		}
 	}
 	if as, ok := a.(string); ok {
 		bs, ok := b.(string)
 		if !ok {
-			return 0, fmt.Errorf("cannot order %T against %T", a, b)
+			return 0, false, fmt.Errorf("cannot order %T against %T", a, b)
 		}
-		return strings.Compare(as, bs), nil
+		return strings.Compare(as, bs), true, nil
 	}
-	return 0, fmt.Errorf("cannot order %T values", a)
+	return 0, false, fmt.Errorf("cannot order %T values", a)
 }
