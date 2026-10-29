@@ -4,6 +4,15 @@ All notable changes to protocheck are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Dependencies**: protowire-go v1.5.0 → v1.12.0 (protovalidate adapter
+  module: v1.10.0 → v1.12.0). This raises protocompile to v0.34.0 and
+  google.golang.org/protobuf to v1.36.12, the versions protowire-go
+  v1.12.0 requires.
+
 ## [2.7.0] - 2026-10-28
 
 The repository was re-created ahead of going public, with one squashed
