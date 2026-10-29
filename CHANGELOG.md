@@ -8,6 +8,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Large integers compare exactly in expressions** (#10). Every number
+  widened to float64 before comparing, and a float64 holds integers
+  exactly only up to 2^53, so `this < 9007199254740993` was false for
+  `this = 9007199254740992` and the two compared equal. Integers now
+  compare as integers across the whole int64 and uint64 ranges (including
+  signed against unsigned), and a float against an integer compares by
+  exact value.
+
 - **NaN no longer passes range checks in expressions** (#9). The built-in
   language ordered NaN as equal to every number, so
   `@validate(this >= 0.0 && this <= 1.0)` accepted NaN. NaN now follows
