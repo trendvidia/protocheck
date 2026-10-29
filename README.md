@@ -387,7 +387,8 @@ string handle = 2 [(protocheck.field) = {
 | Comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` (numbers of any kind compare by value; NaN follows IEEE 754, see below) |
 | Membership | `x in [a, b, c]` |
 | Logical | `&&`, `\|\|`, `!` |
-| Builtins | `size()`, `starts_with(s)`, `ends_with(s)`, `contains(s)`, `matches(re2)`, `is_nan()`, `now()` |
+| Enum values | by name: `this in [MODE_MATCH, Mode.MODE_REGULATE]` (`@validate` only) |
+| Builtins | `size()`, `starts_with(s)`, `ends_with(s)`, `contains(s)`, `matches(re2)`, `is_nan()`, `defined()`, `unique()`, `now()` |
 
 Builtins have a method form (`this.size()`) and a function form
 (`size(this)`). There is deliberately no arithmetic and no field access:
@@ -398,6 +399,28 @@ with a NaN on either side, `==` is false and `!=` is true. A range such as
 `this >= 0.0 && this <= 1.0` therefore refuses NaN, but a negated one such
 as `!(this < 0.0)` accepts it. Add `!this.is_nan()` to refuse NaN whatever
 the rule's shape, or use the structural `finite` rule.
+
+An enum binds as its number, so `this == 1` and `this == MODE_MATCH`
+mean the same. A name is resolved by the compiler, which records it in
+the descriptor; the engine never looks names up itself. `defined()` is
+true when an enum value is one of its enum's declared values, and
+`unique()` when no two list elements are equal. They replace the bracket
+rules `enum.defined_only` and `repeated.unique`. A violation reports a
+declared enum value by its enum-qualified name (`EnumName("t.Mode.MODE_MATCH")`),
+and an undeclared one by its number:
+
+```protobuf
+type KnownTag = StyleTag @validate(this.defined() && this != STYLE_TAG_UNSPECIFIED);
+
+message Descriptor {
+  Mode mode = 1 @required @validate(this in [MODE_MATCH, MODE_REGULATE]);
+  repeated KnownTag tags = 2 @validate(this.unique());
+}
+```
+
+Enum names and `defined()` need a `@validate` rule. A `check` expression
+has no compiler record of names, and its `this` is a plain number, so
+`defined()` there is an evaluation error.
 
 ### Cross-field rules and custom functions
 

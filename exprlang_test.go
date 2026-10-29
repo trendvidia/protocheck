@@ -2,10 +2,12 @@ package protocheck
 
 import (
 	"context"
+	"maps"
 	"math"
 	"math/big"
 	"math/rand/v2"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +39,7 @@ func noCall(fqn string, _ []any) (bool, *Violation) {
 // the given `this` and run instant.
 func evalExpr(t *testing.T, src string, this any, now time.Time) (bool, error) {
 	t.Helper()
-	e, err := compileExpr(src, nil)
+	e, err := compileExpr(src, nil, nil)
 	if err != nil {
 		t.Fatalf("compileExpr(%q): %v", src, err)
 	}
@@ -102,7 +104,7 @@ func TestExprTemporalKinds(t *testing.T) {
 	}
 	// Duration against duration, through equality and ordering; the
 	// literal side has no duration form, so both sides are bound.
-	e, err := compileExpr(`this == this && !(this < this)`, nil)
+	e, err := compileExpr(`this == this && !(this < this)`, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,11 +117,11 @@ func TestExprTemporalKinds(t *testing.T) {
 // now still resolves ahead of the builtin.
 func TestExprNowShape(t *testing.T) {
 	for _, src := range []string{`now(1)`, `now(this)`, `this.now()`} {
-		if _, err := compileExpr(src, nil); err == nil {
+		if _, err := compileExpr(src, nil, nil); err == nil {
 			t.Errorf("%s: want a parse error", src)
 		}
 	}
-	e, err := compileExpr(`now()`, map[string]string{"now": "t.now"})
+	e, err := compileExpr(`now()`, map[string]string{"now": "t.now"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,22 +139,38 @@ func TestExprNowShape(t *testing.T) {
 // library and the well-known types) and returns its FileDescriptor.
 func compileInline(t *testing.T, path, src string) protoreflect.FileDescriptor {
 	t.Helper()
+	return compileInlineWith(t, path, src, nil)
+}
+
+// compileInlineWith is compileInline with further library files, keyed by
+// import path and read from the given repository-relative source paths
+// (protocheck/protocheck.proto for bracket rules).
+func compileInlineWith(t *testing.T, path, src string, libs map[string]string) protoreflect.FileDescriptor {
+	t.Helper()
 	const annotations = "protowire/schema/v1/annotations.proto"
-	lib, err := os.ReadFile("testdata/" + annotations)
-	if err != nil {
-		t.Fatal(err)
+	libs = maps.Clone(libs)
+	if libs == nil {
+		libs = map[string]string{}
 	}
-	files := source.NewMap(map[string]*source.File{
-		annotations: source.NewFile(annotations, string(lib)),
-		path:        source.NewFile(path, src),
-	})
-	openers := &source.Openers{files, source.WKTs()}
-	exec := incremental.New()
+	libs[annotations] = "testdata/" + annotations
+	byPath := map[string]*source.File{path: source.NewFile(path, src)}
+	var queriesIR []incremental.Query[*ir.File]
 	sess := new(ir.Session)
-	results, rep, err := incremental.Run(context.Background(), exec,
-		queries.IR{Opener: openers, Session: sess, Path: annotations},
-		queries.IR{Opener: openers, Session: sess, Path: path},
-	)
+	var openers *source.Openers
+	importPaths := slices.Sorted(maps.Keys(libs))
+	for _, imp := range importPaths {
+		lib, err := os.ReadFile(libs[imp])
+		if err != nil {
+			t.Fatal(err)
+		}
+		byPath[imp] = source.NewFile(imp, string(lib))
+	}
+	openers = &source.Openers{source.NewMap(byPath), source.WKTs()}
+	for _, imp := range append(importPaths, path) {
+		queriesIR = append(queriesIR, queries.IR{Opener: openers, Session: sess, Path: imp})
+	}
+	exec := incremental.New()
+	results, rep, err := incremental.Run(context.Background(), exec, queriesIR...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +180,7 @@ func compileInline(t *testing.T, path, src string) protoreflect.FileDescriptor {
 		}
 	}
 	set := &descriptorpb.FileDescriptorSet{}
-	for _, dep := range []string{"google/protobuf/timestamp.proto", "google/protobuf/wrappers.proto"} {
+	for _, dep := range []string{"google/protobuf/descriptor.proto", "google/protobuf/timestamp.proto", "google/protobuf/wrappers.proto"} {
 		known, err := protoregistry.GlobalFiles.FindFileByPath(dep)
 		if err != nil {
 			t.Fatal(err)
@@ -320,7 +338,7 @@ func TestExprIsNaN(t *testing.T) {
 	if _, err := evalExpr(t, `this.is_nan(1)`, 1.5, runInstant); err == nil || !strings.Contains(err.Error(), "is_nan expects no arguments") {
 		t.Errorf("is_nan with an argument: want an arity error, got %v", err)
 	}
-	if _, err := compileExpr(`is_nan()`, nil); err == nil {
+	if _, err := compileExpr(`is_nan()`, nil, nil); err == nil {
 		t.Error("is_nan() in function form with no receiver: want a compile error")
 	}
 }

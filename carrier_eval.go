@@ -182,7 +182,7 @@ func (v *Validator) validateCarrierRules(now time.Time, path FieldPath, msg prot
 		case populated && fd.Kind() == protoreflect.MessageKind:
 			this = bindMessage(msg.Get(fd).Message())
 		case populated:
-			this = protoValueToGo(msg.Get(fd), fd.Kind())
+			this = bindScalar(fd, msg.Get(fd))
 		case fr.hasDefault:
 			this = fr.defaultValue
 			substituted = true
@@ -262,7 +262,18 @@ func elementBinding(fd protoreflect.FieldDescriptor, elem protoreflect.Value) an
 	if fd.Kind() == protoreflect.MessageKind {
 		return bindMessage(elem.Message())
 	}
-	return protoValueToGo(elem, fd.Kind())
+	return bindScalar(fd, elem)
+}
+
+// bindScalar binds a non-message value of fd's kind. An enum binds as its
+// number together with its enum type (RFC-001 §6.2 rule 6), so defined()
+// can ask whether the number is declared; every other kind binds as
+// protoValueToGo does.
+func bindScalar(fd protoreflect.FieldDescriptor, val protoreflect.Value) any {
+	if fd.Kind() == protoreflect.EnumKind {
+		return enumValue{num: int64(val.Enum()), enum: fd.Enum()}
+	}
+	return protoValueToGo(val, fd.Kind())
 }
 
 // bindMessage binds a set message-typed value as `this` per RFC-001 §6.2:
@@ -314,7 +325,7 @@ func mapBinding(fd protoreflect.FieldDescriptor, m protoreflect.Map) any {
 		if valKind == protoreflect.MessageKind {
 			bound = val.Message().Interface()
 		} else {
-			bound = protoValueToGo(val, valKind)
+			bound = bindScalar(fd.MapValue(), val)
 		}
 		out[mapKeySubscript(k, keyKind).String()] = bound
 		return true
@@ -353,7 +364,7 @@ func (v *Validator) evalCarrierRule(now time.Time, rule *carrierRule, this any, 
 		Path:        path,
 		TypeChain:   typeChain,
 		RuleKind:    rule.kind,
-		ActualValue: actual,
+		ActualValue: reportedValue(actual),
 		Source:      rule.source,
 		SourceRef:   rule.ref,
 	}
