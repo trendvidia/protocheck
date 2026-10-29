@@ -384,14 +384,20 @@ string handle = 2 [(protocheck.field) = {
 | Category | |
 |----------|---|
 | Literals | integers, floats, `"strings"`, `true`, `false`, lists `[1, 2, 3]` |
-| Comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` (numbers of any kind compare by value) |
+| Comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` (numbers of any kind compare by value; NaN follows IEEE 754, see below) |
 | Membership | `x in [a, b, c]` |
 | Logical | `&&`, `\|\|`, `!` |
-| Builtins | `size()`, `starts_with(s)`, `ends_with(s)`, `contains(s)`, `matches(re2)`, `now()` |
+| Builtins | `size()`, `starts_with(s)`, `ends_with(s)`, `contains(s)`, `matches(re2)`, `is_nan()`, `now()` |
 
 Builtins have a method form (`this.size()`) and a function form
 (`size(this)`). There is deliberately no arithmetic and no field access:
 `this.name` is not an expression.
+
+A NaN compares the way IEEE 754 says: `<`, `<=`, `>` and `>=` are false
+with a NaN on either side, `==` is false and `!=` is true. A range such as
+`this >= 0.0 && this <= 1.0` therefore refuses NaN, but a negated one such
+as `!(this < 0.0)` accepts it. Add `!this.is_nan()` to refuse NaN whatever
+the rule's shape, or use the structural `finite` rule.
 
 ### Cross-field rules and custom functions
 

@@ -6,6 +6,25 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **NaN no longer passes range checks in expressions** (#9). The built-in
+  language ordered NaN as equal to every number, so
+  `@validate(this >= 0.0 && this <= 1.0)` accepted NaN. NaN now follows
+  IEEE 754, as RFC-001 §5.4 states since trendvidia/protowire#429: `<`,
+  `<=`, `>` and `>=` are false with a NaN on either side, `==` is false
+  and `!=` is true. This applies to `@validate` rules and to `check`
+  expressions evaluated by the built-in language.
+
+### Added
+
+- **`is_nan()` builtin** (#9, RFC-001 §5.4), in method and function form:
+  true for a floating-point NaN, false for every other number. A negated
+  ordering such as `!(this < 0.0)` still accepts NaN, so
+  `!this.is_nan()` is how a rule refuses it. In `@validate` rules it needs
+  a protocompile release that knows the builtin
+  (trendvidia/protocompile#265); `check` expressions can use it now.
+
 ## [2.7.1] - 2026-10-28
 
 ### Changed
