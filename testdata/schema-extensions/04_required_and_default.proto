@@ -8,7 +8,7 @@
 // Expected behavior:
 //   - The two forms lower to DISJOINT surfaces (no dual-emission; RFC-001
 //     §8.5, issue #92): fields using the annotation form populate only the
-//     50400 carrier — `(pxf.required)`/`(pxf.default)` are NOT synthesized,
+//     1327 carrier — `(pxf.required)`/`(pxf.default)` are NOT synthesized,
 //     so legacy-option readers do not see them.
 //   - Fields declared with the bracket form lower to the legacy options
 //     only, exactly as written; the annotation carrier is NOT populated.
