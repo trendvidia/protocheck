@@ -6,6 +6,15 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **A failed `@validate` rule reports an enum value by name** (#11).
+  `ActualValue` was the value's number; it is now an `EnumName` holding
+  the enum-qualified name (`"t.Mode.MODE_MATCH"`), which converts to the
+  wire `Value`'s `enum_name`. A number the enum does not declare has no
+  name and is still reported as its number. Code that type-asserts an
+  enum's `ActualValue` to `int` needs to handle `EnumName` too.
+
 ### Fixed
 
 - **Large integers compare exactly in expressions** (#10). Every number
@@ -35,8 +44,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   enum, and `unique()` when no two list elements are equal under `==`.
   Both agree with the bracket rules `enum.defined_only` and
   `repeated.unique` on the same inputs. An enum still binds as its
-  number for every operator, for declared functions and in
-  `ActualValue`.
+  number for every operator and for declared functions.
 
 - **`is_nan()` builtin** (#9, RFC-001 §5.4), in method and function form:
   true for a floating-point NaN, false for every other number. A negated

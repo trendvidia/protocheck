@@ -125,12 +125,24 @@ func TestEnumNamesDefinedUnique(t *testing.T) {
 		}
 	}
 
-	// An enum reports its number, as it always has.
-	m := valid()
-	m.Set(field("mode2"), enum(7))
-	got := v.validate(runInstant, nil, m)
-	if len(got) != 1 || got[0].ActualValue != 7 {
-		t.Fatalf("ActualValue: got %v, want the int 7", got)
+	// A declared enum value reports by its enum-qualified name, an
+	// undeclared one by its number, which has no name.
+	for _, tc := range []struct {
+		build func(*dynamicpb.Message)
+		want  any
+	}{
+		{func(m *dynamicpb.Message) { m.Set(field("mode2"), enum(7)) }, 7},
+		{func(m *dynamicpb.Message) { setList(m, "tags", enum(0)) }, EnumName("t.StyleTag.STYLE_TAG_UNSPECIFIED")},
+		{func(m *dynamicpb.Message) {
+			m.Mutable(field("tag_by_name")).Map().Set(protoreflect.ValueOfString("x").MapKey(), enum(0))
+		}, EnumName("t.StyleTag.STYLE_TAG_UNSPECIFIED")},
+	} {
+		m := valid()
+		tc.build(m)
+		got := v.validate(runInstant, nil, m)
+		if len(got) != 1 || got[0].ActualValue != tc.want {
+			t.Errorf("ActualValue: got %v, want %v (%T)", got, tc.want, tc.want)
+		}
 	}
 }
 

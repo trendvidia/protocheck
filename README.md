@@ -405,7 +405,9 @@ mean the same. A name is resolved by the compiler, which records it in
 the descriptor; the engine never looks names up itself. `defined()` is
 true when an enum value is one of its enum's declared values, and
 `unique()` when no two list elements are equal. They replace the bracket
-rules `enum.defined_only` and `repeated.unique`:
+rules `enum.defined_only` and `repeated.unique`. A violation reports a
+declared enum value by its enum-qualified name (`EnumName("t.Mode.MODE_MATCH")`),
+and an undeclared one by its number:
 
 ```protobuf
 type KnownTag = StyleTag @validate(this.defined() && this != STYLE_TAG_UNSPECIFIED);

@@ -364,7 +364,7 @@ func (v *Validator) evalCarrierRule(now time.Time, rule *carrierRule, this any, 
 		Path:        path,
 		TypeChain:   typeChain,
 		RuleKind:    rule.kind,
-		ActualValue: unwrapEnum(actual), // An enum reports its number, as it always has.
+		ActualValue: reportedValue(actual),
 		Source:      rule.source,
 		SourceRef:   rule.ref,
 	}

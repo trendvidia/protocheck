@@ -789,12 +789,28 @@ func (e enumValue) defined() bool {
 }
 
 // unwrapEnum turns an enum value back into the plain int an enum has
-// always bound as, for declared functions and for reported values.
+// always bound as, for declared functions.
 func unwrapEnum(v any) any {
 	if e, ok := v.(enumValue); ok {
 		return int(e.num)
 	}
 	return v
+}
+
+// reportedValue is v as a violation reports it: an enum value its type
+// declares by its enum-qualified name ("t.Mode.MODE_MATCH", the wire's
+// enum_name), any other enum value by its number, which has no name.
+func reportedValue(v any) any {
+	e, ok := v.(enumValue)
+	if !ok {
+		return v
+	}
+	if e.enum != nil {
+		if ev := e.enum.Values().ByNumber(protoreflect.EnumNumber(e.num)); ev != nil {
+			return EnumName(string(e.enum.FullName()) + "." + string(ev.Name()))
+		}
+	}
+	return int(e.num)
 }
 
 // isNumber reports whether v is one of the numeric kinds `this` and
