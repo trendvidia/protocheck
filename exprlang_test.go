@@ -3,6 +3,8 @@ package protocheck
 import (
 	"context"
 	"math"
+	"math/big"
+	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
@@ -364,4 +366,140 @@ message Descriptor {
 			t.Errorf("energy = %v: code %q, want the rule's own", tc.val, got[0].Cause.Code)
 		}
 	}
+}
+
+// Numbers compare by exact value whatever their kind (§5.4, #10). Every
+// kind used to widen to float64, which rounds integers beyond 2^53, so
+// 2^53 and 2^53+1 compared equal. Each case is checked in both operand
+// orders.
+func TestCompareNumbersExact(t *testing.T) {
+	const p53 = 1 << 53
+	cases := []struct {
+		a, b any
+		want int // -1, 0, 1; 2 = unordered
+	}{
+		{int64(p53), int64(p53 + 1), -1},
+		{int(p53 + 1), int64(p53), 1},
+		{int64(math.MaxInt64), int64(math.MaxInt64 - 1), 1},
+		{uint64(math.MaxUint64), uint64(math.MaxUint64 - 1), 1},
+		{int64(-1), uint64(0), -1},
+		{int64(-1), uint64(math.MaxUint64), -1},
+		{int64(math.MaxInt64), uint64(1 << 63), -1},
+		{int64(math.MaxInt64), uint64(math.MaxInt64), 0},
+		{float64(p53), int64(p53 + 1), -1},
+		{float64(p53), uint64(p53 + 1), -1},
+		{float64(p53), int64(p53), 0},
+		{0.5, int64(0), 1},
+		{-0.5, int64(0), -1},
+		{-0.5, uint64(0), -1},
+		{-0.0, int64(0), 0},
+		{float64(1 << 63), int64(math.MaxInt64), 1},
+		{float64(-(1 << 63)), int64(math.MinInt64), 0},
+		{float64(1 << 64), uint64(math.MaxUint64), 1},
+		{math.Nextafter(1<<64, 0), uint64(math.MaxUint64), -1},
+		{math.Inf(1), int64(math.MaxInt64), 1},
+		{math.Inf(-1), int64(math.MinInt64), -1},
+		{math.Inf(1), uint64(math.MaxUint64), 1},
+		{math.NaN(), int64(0), 2},
+		{math.NaN(), uint64(0), 2},
+		{1.5, 2.5, -1},
+	}
+	for _, tc := range cases {
+		for _, pair := range [][2]any{{tc.a, tc.b}, {tc.b, tc.a}} {
+			want := tc.want
+			if pair[0] != tc.a && want != 2 {
+				want = -want
+			}
+			c, ordered := compareNumbers(pair[0], pair[1])
+			got := c
+			if !ordered {
+				got = 2
+			}
+			if got != want {
+				t.Errorf("compareNumbers(%v (%T), %v (%T)) = %d, want %d", pair[0], pair[0], pair[1], pair[1], got, want)
+			}
+		}
+	}
+}
+
+// The #10 repro through the language: a bound integer against a literal
+// one above 2^53, for each operator.
+func TestExprLargeIntegers(t *testing.T) {
+	for _, this := range []any{int64(1 << 53), int(1 << 53), uint64(1 << 53)} {
+		for src, want := range map[string]bool{
+			`this < 9007199254740993`:    true,
+			`this == 9007199254740993`:   false,
+			`this != 9007199254740993`:   true,
+			`this > 9007199254740991`:    true,
+			`this in [9007199254740993]`: false,
+			`this == 9007199254740992`:   true,
+			`this >= 9007199254740992.0`: true,
+			`this < 9223372036854775807`: true,
+		} {
+			if ok, err := evalExpr(t, src, this, runInstant); err != nil || ok != want {
+				t.Errorf("this = %v (%T): %s = (%v, %v), want (%v, nil)", this, this, src, ok, err, want)
+			}
+		}
+	}
+	if ok, err := evalExpr(t, `this > 9223372036854775807`, uint64(math.MaxUint64), runInstant); err != nil || !ok {
+		t.Errorf("uint64 max > int64 max: got (%v, %v)", ok, err)
+	}
+}
+
+// compareNumbers agrees with exact big.Float arithmetic on every pair of
+// values near each kind's boundaries, plus random ones.
+func TestCompareNumbersMatchesBig(t *testing.T) {
+	vals := []any{int64(math.MinInt64), int64(math.MaxInt64), uint64(math.MaxUint64), math.Inf(1), math.Inf(-1), math.NaN()}
+	for _, e := range []float64{0, 1 << 53, 1 << 63, 1 << 64} {
+		vals = append(vals, e, -e, math.Nextafter(e, 0), math.Nextafter(e, math.Inf(1)), e+0.5, -e-0.5)
+		for d := -3.0; d <= 3; d++ {
+			if v := e + d; e < 1<<63 && v >= -(1<<63) {
+				vals = append(vals, int64(e)+int64(d), -int64(e)+int64(d))
+			}
+			if e < 1<<64 && e+d >= 0 {
+				vals = append(vals, uint64(e)+uint64(int64(d)))
+			}
+		}
+	}
+	r := rand.New(rand.NewPCG(10, 10))
+	for range 200 {
+		vals = append(vals, int64(r.Uint64()), r.Uint64(), math.Float64frombits(r.Uint64()))
+	}
+	exact := func(v any) (*big.Float, bool) {
+		f := new(big.Float).SetPrec(0)
+		switch n := v.(type) {
+		case int64:
+			return f.SetInt64(n), true
+		case uint64:
+			return f.SetUint64(n), true
+		case float64:
+			if math.IsNaN(n) {
+				return nil, false
+			}
+			return f.SetFloat64(n), true
+		}
+		panic(v)
+	}
+	pairs := 0
+	for _, a := range vals {
+		for _, b := range vals {
+			ea, okA := exact(a)
+			eb, okB := exact(b)
+			c, ordered := compareNumbers(a, b)
+			if !okA || !okB {
+				if ordered {
+					t.Errorf("compareNumbers(%v, %v): ordered with a NaN", a, b)
+				}
+				continue
+			}
+			if want := ea.Cmp(eb); !ordered || c != want {
+				t.Errorf("compareNumbers(%v (%T), %v (%T)) = (%d, %v), want (%d, true)", a, a, b, b, c, ordered, want)
+			}
+			pairs++
+		}
+	}
+	if pairs < 100000 {
+		t.Fatalf("compared only %d ordered pairs", pairs)
+	}
+	t.Logf("compared %d ordered pairs against big.Float", pairs)
 }

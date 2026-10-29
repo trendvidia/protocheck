@@ -683,7 +683,7 @@ func evalBuiltinMethod(recv any, method string, args []any) (any, error) {
 		if len(args) != 0 {
 			return nil, fmt.Errorf("is_nan expects no arguments, got %d", len(args))
 		}
-		if _, ok := numeric(recv); !ok {
+		if !isNumber(recv) {
 			return nil, fmt.Errorf("is_nan is not defined on %T", recv)
 		}
 		f, isFloat := recv.(float64)
@@ -718,20 +718,116 @@ func evalBuiltinMethod(recv any, method string, args []any) (any, error) {
 
 // ─── Value semantics ────────────────────────────────────────────────────────
 
-// numeric widens a numeric value for cross-type comparison.
-func numeric(v any) (float64, bool) {
-	switch n := v.(type) {
-	case int64:
-		return float64(n), true
-	case int:
-		return float64(n), true
-	case uint64:
-		return float64(n), true
-	case float64:
-		return n, true
-	default:
-		return 0, false
+// isNumber reports whether v is one of the numeric kinds `this` and
+// literals bind as: int, int64, uint64 or float64.
+func isNumber(v any) bool {
+	switch v.(type) {
+	case int, int64, uint64, float64:
+		return true
 	}
+	return false
+}
+
+// compareNumbers orders two numbers by their exact mathematical value
+// (§5.4: they compare by value whatever their representation; #10).
+// Widening every kind to float64 is not exact: integers beyond 2^53
+// round, so 2^53 and 2^53+1 compared equal. ordered is false when either
+// is a NaN. Both operands must satisfy isNumber.
+func compareNumbers(a, b any) (c int, ordered bool) {
+	if v, ok := a.(int); ok {
+		a = int64(v)
+	}
+	if v, ok := b.(int); ok {
+		b = int64(v)
+	}
+	switch av := a.(type) {
+	case int64:
+		switch bv := b.(type) {
+		case int64:
+			return cmpOrdered(av, bv), true
+		case uint64:
+			return cmpIntUint(av, bv), true
+		case float64:
+			c, ok := cmpFloatInt(bv, av)
+			return -c, ok
+		}
+	case uint64:
+		switch bv := b.(type) {
+		case int64:
+			return -cmpIntUint(bv, av), true
+		case uint64:
+			return cmpOrdered(av, bv), true
+		case float64:
+			c, ok := cmpFloatUint(bv, av)
+			return -c, ok
+		}
+	case float64:
+		switch bv := b.(type) {
+		case int64:
+			return cmpFloatInt(av, bv)
+		case uint64:
+			return cmpFloatUint(av, bv)
+		case float64:
+			if math.IsNaN(av) || math.IsNaN(bv) {
+				return 0, false
+			}
+			return cmpOrdered(av, bv), true
+		}
+	}
+	panic(fmt.Sprintf("compareNumbers(%T, %T)", a, b))
+}
+
+func cmpOrdered[T int64 | uint64 | float64](a, b T) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
+}
+
+func cmpIntUint(i int64, u uint64) int {
+	if i < 0 {
+		return -1
+	}
+	return cmpOrdered(uint64(i), u)
+}
+
+// cmpFloatInt and cmpFloatUint compare a float with an integer exactly:
+// outside the integer type's range the float's sign decides; inside it,
+// the float's integer part converts without loss and its fraction breaks
+// a tie.
+func cmpFloatInt(f float64, i int64) (int, bool) {
+	switch {
+	case math.IsNaN(f):
+		return 0, false
+	case f < -(1 << 63):
+		return -1, true
+	case f >= 1<<63:
+		return 1, true
+	}
+	t := math.Trunc(f)
+	if c := cmpOrdered(int64(t), i); c != 0 {
+		return c, true
+	}
+	return cmpOrdered(f, t), true
+}
+
+func cmpFloatUint(f float64, u uint64) (int, bool) {
+	switch {
+	case math.IsNaN(f):
+		return 0, false
+	case f < 0:
+		return -1, true
+	case f >= 1<<64:
+		return 1, true
+	}
+	t := math.Trunc(f)
+	if c := cmpOrdered(uint64(t), u); c != 0 {
+		return c, true
+	}
+	return cmpOrdered(f, t), true
 }
 
 // temporalEqual and temporalCompare implement RFC-001 §6.2 rule 2:
@@ -797,12 +893,12 @@ func valuesEqual(a, b any) (bool, error) {
 	if eq, ok, err := temporalEqual(a, b); ok {
 		return eq, err
 	}
-	if fa, ok := numeric(a); ok {
-		fb, ok := numeric(b)
-		if !ok {
+	if isNumber(a) {
+		if !isNumber(b) {
 			return false, fmt.Errorf("cannot compare %T with %T", a, b)
 		}
-		return fa == fb, nil
+		c, ordered := compareNumbers(a, b)
+		return ordered && c == 0, nil
 	}
 	switch av := a.(type) {
 	case string:
@@ -822,21 +918,12 @@ func compareValues(a, b any) (c int, ordered bool, err error) {
 	if c, ok, err := temporalCompare(a, b); ok {
 		return c, true, err
 	}
-	if fa, ok := numeric(a); ok {
-		fb, ok := numeric(b)
-		if !ok {
+	if isNumber(a) {
+		if !isNumber(b) {
 			return 0, false, fmt.Errorf("cannot order %T against %T", a, b)
 		}
-		switch {
-		case fa < fb:
-			return -1, true, nil
-		case fa > fb:
-			return 1, true, nil
-		case fa == fb:
-			return 0, true, nil
-		default:
-			return 0, false, nil
-		}
+		c, ordered := compareNumbers(a, b)
+		return c, ordered, nil
 	}
 	if as, ok := a.(string); ok {
 		bs, ok := b.(string)
