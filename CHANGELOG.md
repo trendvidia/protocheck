@@ -6,6 +6,26 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Enum value names, `defined()` and `unique()` in `@validate` rules**
+  (#11, RFC-001 §5.4 as amended by trendvidia/protowire#432). A rule can
+  name an enum value (`this in [MODE_MATCH, Mode.MODE_REGULATE]`); the
+  engine takes its number from `Expression.enum_values`, which the
+  compiler records (trendvidia/protocompile#275), and never resolves a
+  name itself. `defined()` is true when an enum value is declared in its
+  enum, and `unique()` when no two list elements are equal under `==`.
+  Both agree with the bracket rules `enum.defined_only` and
+  `repeated.unique` on the same inputs. An enum still binds as its
+  number for every operator and for declared functions.
+
+- **`is_nan()` builtin** (#9, RFC-001 §5.4), in method and function form:
+  true for a floating-point NaN, false for every other number. A negated
+  ordering such as `!(this < 0.0)` still accepts NaN, so
+  `!this.is_nan()` is how a rule refuses it. In `@validate` rules it needs
+  protocompile v0.36.0 or later, which knows the builtin
+  (trendvidia/protocompile#265).
+
 ### Changed
 
 - **Dependencies**: protocompile v0.35.1 → v0.36.0, which records enum
@@ -37,26 +57,6 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `<=`, `>` and `>=` are false with a NaN on either side, `==` is false
   and `!=` is true. This applies to `@validate` rules and to `check`
   expressions evaluated by the built-in language.
-
-### Added
-
-- **Enum value names, `defined()` and `unique()` in `@validate` rules**
-  (#11, RFC-001 §5.4 as amended by trendvidia/protowire#432). A rule can
-  name an enum value (`this in [MODE_MATCH, Mode.MODE_REGULATE]`); the
-  engine takes its number from `Expression.enum_values`, which the
-  compiler records (trendvidia/protocompile#275), and never resolves a
-  name itself. `defined()` is true when an enum value is declared in its
-  enum, and `unique()` when no two list elements are equal under `==`.
-  Both agree with the bracket rules `enum.defined_only` and
-  `repeated.unique` on the same inputs. An enum still binds as its
-  number for every operator and for declared functions.
-
-- **`is_nan()` builtin** (#9, RFC-001 §5.4), in method and function form:
-  true for a floating-point NaN, false for every other number. A negated
-  ordering such as `!(this < 0.0)` still accepts NaN, so
-  `!this.is_nan()` is how a rule refuses it. In `@validate` rules it needs
-  a protocompile release that knows the builtin
-  (trendvidia/protocompile#265); `check` expressions can use it now.
 
 ## [2.7.1] - 2026-10-28
 
