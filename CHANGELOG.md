@@ -6,6 +6,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-10-28
+
 ### Changed
 
 - **Dependencies**: protowire-go v1.5.0 → v1.12.0 (protovalidate adapter
@@ -557,14 +559,6 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
 
 - Initial release.
 
-[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.4.0...HEAD
-[2.5.0]: https://github.com/trendvidia/protocheck/compare/v2.4.0...v2.5.0
-[2.4.0]: https://github.com/trendvidia/protocheck/compare/v2.3.0...v2.4.0
-[2.3.0]: https://github.com/trendvidia/protocheck/compare/v2.2.0...v2.3.0
-[2.2.0]: https://github.com/trendvidia/protocheck/compare/v2.1.0...v2.2.0
-[2.1.0]: https://github.com/trendvidia/protocheck/compare/v2.0.0...v2.1.0
-[2.0.0]: https://github.com/trendvidia/protocheck/compare/v1.2.0...v2.0.0
-[1.2.0]: https://github.com/trendvidia/protocheck/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/trendvidia/protocheck/compare/v1.0.1...v1.1.0
-[1.0.1]: https://github.com/trendvidia/protocheck/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/trendvidia/protocheck/releases/tag/v1.0.0
+[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.7.1...HEAD
+[2.7.1]: https://github.com/trendvidia/protocheck/compare/v2.7.0...v2.7.1
+[2.7.0]: https://github.com/trendvidia/protocheck/releases/tag/v2.7.0
