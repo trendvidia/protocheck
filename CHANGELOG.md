@@ -31,7 +31,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - **Dependencies**: protocompile v0.35.1 → v0.36.1, which records enum
   value names in `Expression.enum_values` and checks expression defaults
   and boolean rules (trendvidia/protocompile#275, #286), and protowire-go
-  v1.12.0 → v1.12.1 (protovalidate adapter module too). protowire-go
+  v1.12.0 → v1.12.1 (protovalidate adapter module too; the adapter also
+  takes the buf.validate protos' generation revision .2). protowire-go
   v1.12.1 no longer requires buf.build modules, so protocheck's own module
   graph names none (`go mod graph | grep -c buf.build`: 2 → 0); the
   protovalidate adapter still depends on protovalidate, which buf.build
