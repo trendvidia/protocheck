@@ -702,6 +702,36 @@ go work init ./protocheck ./protocheck/protovalidate ./protowire-go
 CI and release builds must run with the workspace off (`GOWORK=off`) to
 verify the committed `go.mod` versions.
 
+## Connect interceptor (`protocheckconnect`)
+
+The `protocheckconnect` module validates ConnectRPC messages. It is a nested
+module, so protocheck itself takes no Connect dependency:
+
+```go
+import "github.com/trendvidia/protocheck/protocheckconnect"
+
+v, err := protocheck.New()
+icpt, err := protocheckconnect.NewInterceptor(v)
+path, handler := acmev1connect.NewSongServiceHandler(svc, connect.WithInterceptors(icpt))
+```
+
+It follows the RPC contract of RFC-001 §6.6, on both unary calls and streams.
+Add it to a client as well and responses are checked there too.
+
+| Message | Found by | Result |
+|---|---|---|
+| Invalid request | Server | `CodeInvalidArgument`; the handler never sees it |
+| Invalid response | Client | `CodeInternal`, as a local error |
+| Invalid message on a stream | Receiver | Ends the stream; messages before it stay delivered |
+| Not validated (a rule cannot be loaded) | Either side | `CodeInternal`, no report |
+
+Each validation error carries a `protowire.schema.v1.Report` detail, which
+`protocheckconnect.ReportOf(err)` reads back. The report goes to the peer, and
+it includes rule codes, source locations and offending values, except those of
+`@sensitive` fields. To send your own error detail instead, use
+`WithErrorFunc`. `WithSenderValidation` also checks messages before they are
+sent. The module is versioned on its own (`protocheckconnect/v0.x` tags).
+
 ## Project structure
 
 ```
@@ -717,6 +747,7 @@ protocheck/
 ├── violations.go                       # ValidationError, Violation types
 ├── protowire/                          # protowire-go check.Validator adapter
 ├── protovalidate/                      # Nested module: protovalidate (CEL) adapter
+├── protocheckconnect/                  # Nested module: ConnectRPC interceptor
 ├── protocheck_test.go                  # Tests
 ├── internal/testpb/                    # Test proto definitions
 ├── buf.yaml                            # buf workspace + lint config

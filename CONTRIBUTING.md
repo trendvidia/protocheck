@@ -13,6 +13,7 @@ git clone https://github.com/trendvidia/protocheck.git
 cd protocheck
 make test                               # go test -count=1 ./...
 (cd protovalidate && go test ./...)     # nested protovalidate adapter module
+(cd protocheckconnect && go test ./...) # nested Connect interceptor module
 make check                              # buf format check + lint
 ```
 
