@@ -93,7 +93,7 @@ type EnrichedViolation struct {
 	ValueRedacted bool
 
 	// Source is the rule's position in the originating .proto source,
-	// from the embedded source map (carrier 50404). nil when the
+	// from the embedded source map (carrier 1331). nil when the
 	// descriptor carries no source map (pre-v1.2 toolchains) or the rule
 	// came from protocheck's own option extensions.
 	Source *SourceLocation
