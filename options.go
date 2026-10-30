@@ -58,10 +58,17 @@ func WithFailFast() Option {
 }
 
 // WithDescriptors supplies the schema files New verifies at construction
-// time (RFC-001 §9.2): every function FQN a file declares (carrier 50401)
-// or calls from a lowered annotation expression (carrier 50400) must have a
-// registered implementation. Without WithStrictValidation, a miss installs
-// an Unimplemented placeholder that fails at first call.
+// time (RFC-001 §9.2), each with everything it imports: every function FQN
+// a file declares (carrier 1328) or calls from a lowered annotation
+// expression (carrier 1327) must have a registered implementation. Without
+// WithStrictValidation, a miss installs an Unimplemented placeholder that
+// fails at first call.
+//
+// It does not decide which rules run: the Validator enforces a message's
+// @validate and @required rules with or without it. Pass it to get a bad
+// schema reported by New instead of the first Validate, or to supply
+// descriptors holding source info, which violations then cite; a listed
+// file's rules replace those of any linked message of the same name.
 func WithDescriptors(files ...protoreflect.FileDescriptor) Option {
 	return func(cfg *validatorConfig) {
 		cfg.descriptors = append(cfg.descriptors, files...)
@@ -69,8 +76,8 @@ func WithDescriptors(files ...protoreflect.FileDescriptor) Option {
 }
 
 // WithStrictValidation makes init-time verification strict (RFC-001 §9.2):
-// a function FQN required by a WithDescriptors file but missing from the
-// registry fails New instead of being substituted with an Unimplemented
+// a function FQN required by a WithDescriptors file or one of its imports
+// but missing from the registry fails New instead of being substituted with an Unimplemented
 // placeholder.
 func WithStrictValidation() Option {
 	return func(cfg *validatorConfig) {

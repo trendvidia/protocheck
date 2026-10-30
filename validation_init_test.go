@@ -20,7 +20,7 @@ import (
 
 // compileRFC compiles one RFC-001-extended .proto source through the real
 // protowire compiler (protocompile) and returns its FileDescriptor, carriers
-// 50400/50401 included — the same lowering the conformance fixtures in
+// 1327/1328 included — the same lowering the conformance fixtures in
 // protowire's testdata/schema-extensions/ exercise.
 func compileRFC(t *testing.T, src string) protoreflect.FileDescriptor {
 	t.Helper()
@@ -154,7 +154,7 @@ func TestVerifyStrictRegisteredImplPasses(t *testing.T) {
 
 func TestVerifyStrictDeclarationWithoutCallSites(t *testing.T) {
 	// A `function` declaration is part of the file's contract even when
-	// nothing calls it yet (carrier 50401).
+	// nothing calls it yet (carrier 1328).
 	fd := compileRFC(t, `syntax = "proto3";
 package fixtures.decls;
 
@@ -232,7 +232,7 @@ func TestWithFunctionSPIDuplicate(t *testing.T) {
 }
 
 func TestVerifyDescriptorWithoutCarriers(t *testing.T) {
-	// A plain proto3 file carries no 50400/50401 payloads; verification is
+	// A plain proto3 file carries no 1327/1328 payloads; verification is
 	// a no-op in both modes.
 	fd := compileRFC(t, `syntax = "proto3";
 package fixtures.plain;

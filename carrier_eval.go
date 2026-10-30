@@ -30,8 +30,8 @@ func (v *Validator) callFunction(fqn string, args []any) (bool, *Violation) {
 }
 
 // validateCarrierRules evaluates the carrier rules indexed for msg's type.
-func (v *Validator) validateCarrierRules(now time.Time, path FieldPath, msg protoreflect.Message) []*EnrichedViolation {
-	mr := v.carrier.messageOf(msg.Descriptor().FullName())
+func (v *Validator) validateCarrierRules(now time.Time, carrier *carrierIndex, path FieldPath, msg protoreflect.Message) []*EnrichedViolation {
+	mr := carrier.messageOf(msg.Descriptor().FullName())
 	if mr == nil {
 		return nil
 	}

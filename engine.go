@@ -215,6 +215,9 @@ func (e *spiEngine) RegisterCatalog(locale string, catalog Catalog) error {
 // Validate checks msg against all protocheck constraints and wraps the
 // outcome in a Report.
 func (e *spiEngine) Validate(msg proto.Message) (*Report, error) {
+	if msg == nil {
+		return nil, errNilMessage
+	}
 	report := &Report{
 		MessageType: string(msg.ProtoReflect().Descriptor().FullName()),
 		Mode:        ExecutionModeCollectAll,

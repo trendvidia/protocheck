@@ -252,10 +252,10 @@ message Window {
 	setTimestamp(t, msg, "opens", runInstant)
 	setTimestamp(t, msg, "closes", runInstant)
 
-	if got := v.validate(runInstant, nil, msg); len(got) != 0 {
+	if got := v.validate(runInstant, v.carrier, nil, msg); len(got) != 0 {
 		t.Fatalf("both rules must see the run's instant; got %v", got)
 	}
-	got := v.validate(runInstant.Add(time.Second), nil, msg)
+	got := v.validate(runInstant.Add(time.Second), v.carrier, nil, msg)
 	if len(got) != 2 {
 		t.Fatalf("shifted instant must fail both rules; got %d: %v", len(got), got)
 	}
@@ -384,7 +384,7 @@ message Descriptor {
 	} {
 		msg := dynamicpb.NewMessage(md)
 		msg.Set(energy, protoreflect.ValueOfFloat32(tc.val))
-		got := v.validate(runInstant, nil, msg)
+		got := v.validate(runInstant, v.carrier, nil, msg)
 		if refused := len(got) > 0; refused != tc.refused {
 			t.Errorf("energy = %v: refused = %v, want %v (%v)", tc.val, refused, tc.refused, got)
 			continue

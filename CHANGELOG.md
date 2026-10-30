@@ -6,6 +6,34 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`New()` enforces `@validate`, `@required` and `@default` rules with no
+  option** (#20). They used to run only for files listed in
+  `WithDescriptors`, and nothing warned when a file was missing, so a
+  validator built without the option passed every value on those fields. A
+  `Validate` now reads the rules from the descriptor of the message's own
+  file and its imports. Programs that never listed their files start
+  refusing bad values, and a rule calling a function they never registered
+  starts failing with `protowire.function.unimplemented`.
+
+- **`WithDescriptors` follows imports**: a listed file's imports are
+  verified and their rules enforced like the file's own (#20). With
+  `WithStrictValidation`, a function that only an imported file declares or
+  calls must now be registered, or `New` fails.
+
+- **`Validate` refuses a nil message.** `Validate(nil)` panicked, and a typed
+  nil such as `(*pb.Song)(nil)` passed as valid. Both now return an error that
+  is not a `*ValidationError`, from `Engine().Validate` too. An unset
+  message-typed field is unchanged: it is still skipped.
+
+### Changed
+
+- **`Validate` can return an error that is not a `*ValidationError`**: when a
+  rule outside `WithDescriptors` cannot be loaded, the message is not
+  validated and `Validate` says so (#20). `New` reports the same problem for
+  listed files, as it always has.
+
 ## [2.8.0] — 2026-10-30
 
 A minor release for RFC-001 §5.4's new expression features: enum value

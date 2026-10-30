@@ -9,10 +9,10 @@ import (
 )
 
 // This file implements the init-time function verification of RFC-001 §9.2:
-// New() walks the descriptors passed via WithDescriptors, extracts every
-// function FQN the schema depends on — `function` declarations from the
-// file-scope carrier (extension 50401) and call sites recorded in lowered
-// annotation expressions (extension 50400, Expression.calls) — and checks
+// New() walks the descriptors passed via WithDescriptors and their imports,
+// extracts every function FQN the schema depends on — `function` declarations
+// from the file-scope carrier (extension 1328) and call sites recorded in
+// lowered annotation expressions (extension 1327, Expression.calls) — and checks
 // each against the registered implementations. Missing-impl default is
 // lenient: an Unimplemented placeholder that fails at first call.
 // WithStrictValidation turns misses into New() errors.
@@ -24,7 +24,7 @@ import (
 //
 // Carrier payloads decode because this package links the generated
 // protowire.schema.v1 types into the global registry: descriptors
-// unmarshaled in-process resolve extensions 50400/50401 instead of parking
+// unmarshaled in-process resolve extensions 1327/1328 instead of parking
 // them in unknown fields.
 
 // UnimplementedFunction returns the placeholder implementation installed for
@@ -99,19 +99,19 @@ func verifyRegisteredFunctions(fd protoreflect.FileDescriptor, registry map[stri
 }
 
 // collectRequiredFunctions gathers function FQNs from the file's declaration
-// carrier (50401) and from every annotation-carried expression's call list
-// (50400) across the descriptor tree.
+// carrier (1328) and from every annotation-carried expression's call list
+// (1327) across the descriptor tree.
 func collectRequiredFunctions(fd protoreflect.FileDescriptor) []requiredFunc {
 	var required []requiredFunc
 
-	// ── File-scope `function` declarations (extension 50401) ────────────
+	// ── File-scope `function` declarations (extension 1328) ─────────────
 	if decls := readExtension(fd.Options(), schemav1.E_Functions, func() *schemav1.FileFunctions { return &schemav1.FileFunctions{} }); decls != nil {
 		for _, d := range decls.GetDeclarations() {
 			required = append(required, requiredFunc{fqn: d.GetName(), loc: d.GetLocation()})
 		}
 	}
 
-	// ── Annotation call sites (extension 50400) ─────────────────────────
+	// ── Annotation call sites (extension 1327) ──────────────────────────
 	collect := func(list *schemav1.AnnotationList) {
 		for _, ann := range list.GetEntries() {
 			for _, arg := range ann.GetArgs() {
