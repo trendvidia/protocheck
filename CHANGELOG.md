@@ -24,6 +24,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   protocheck ignored it, so a schema that carries it starts refusing an empty
   oneof.
 
+- **`WithRegistration`** (#26): runs a callback on the `Engine` inside `New`,
+  before verification, so generated `RegisterFunctions` helpers work with
+  `WithStrictValidation`. Strict checks that a function is registered, not that
+  it does anything: a method inherited from an embedded
+  `UnimplementedFunctions` passes it and fails at first call.
+
 ### Changed
 
 - **Declared functions receive numbers in their declared type** (RFC-001 §9.1,

@@ -496,7 +496,9 @@ with the mask (`pxf build` adds it) and a decode with `pxf.UnmarshalFull`,
 because `pxf.Unmarshal` records no nulls. Without those, a null looks absent.
 Bracket rules do not read the mask.
 
-Add `WithDescriptors` to find those problems at startup. `New` then checks the
+Add `WithDescriptors` to find those problems at startup.
+Functions registered by a generated helper go through `WithRegistration`, so
+they are in place before that check runs. `New` then checks the
 listed files and their imports, and `WithStrictValidation` makes a missing
 function fail `New`. `WithStrictValidation` only covers files that
 `WithDescriptors` reaches. Descriptors that hold source info, such as compiler

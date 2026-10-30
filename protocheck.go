@@ -98,6 +98,12 @@ func New(opts ...Option) (*Validator, error) {
 	for fqn, impl := range cfg.spiFuncs {
 		v.spiFuncs[fqn] = &registeredFunc{impl: impl}
 	}
+	v.engine = newSPIEngine(v, cfg.catalogs)
+	for _, fn := range cfg.register {
+		if err := fn(v.engine); err != nil {
+			return nil, fmt.Errorf("protocheck: WithRegistration: %w", err)
+		}
+	}
 	v.listed = withImports(cfg.descriptors)
 	v.listedPaths = make(map[string]bool, len(v.listed))
 	for _, fd := range v.listed {
@@ -112,7 +118,6 @@ func New(opts ...Option) (*Validator, error) {
 		return nil, err
 	}
 	v.carrier = carrier
-	v.engine = newSPIEngine(v, cfg.catalogs)
 	return v, nil
 }
 
