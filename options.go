@@ -13,6 +13,7 @@ type validatorConfig struct {
 	spiFuncs    map[string]Function
 	catalogs    map[string]Catalog
 	descriptors []protoreflect.FileDescriptor
+	register    []func(Engine) error
 	exprEngine  ExpressionEngine
 	failFast    bool
 	strict      bool
@@ -72,6 +73,40 @@ func WithFailFast() Option {
 func WithDescriptors(files ...protoreflect.FileDescriptor) Option {
 	return func(cfg *validatorConfig) {
 		cfg.descriptors = append(cfg.descriptors, files...)
+	}
+}
+
+// WithRegistration runs fn against the Validator's Engine during New, before
+// init-time verification, so functions it registers count towards it. This is
+// how generated registration helpers (RFC-001 §9.3) work with
+// WithStrictValidation, which otherwise fails New before v.Engine() exists:
+//
+//	protocheck.New(
+//	    protocheck.WithDescriptors(pb.File_acme_v1_song_proto),
+//	    protocheck.WithRegistration(func(e protocheck.Engine) error {
+//	        return pb.RegisterSongFunctions(e, impl)
+//	    }),
+//	    protocheck.WithStrictValidation(),
+//	)
+//
+// fn should only register: the Validator is not ready to validate until New
+// returns. An error from fn fails New.
+//
+// Verification checks that a name is registered, not what the implementation
+// does. A method inherited from an embedded UnimplementedFunctions is
+// registered by the helper like any other, so it passes WithStrictValidation
+// and fails at first call. Leave the embedding out to have the compiler refuse
+// a missing method instead.
+func WithRegistration(fn func(Engine) error) Option {
+	return func(cfg *validatorConfig) {
+		if cfg.err != nil {
+			return
+		}
+		if fn == nil {
+			cfg.err = fmt.Errorf("WithRegistration: nil function")
+			return
+		}
+		cfg.register = append(cfg.register, fn)
 	}
 }
 
