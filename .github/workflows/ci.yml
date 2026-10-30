@@ -55,3 +55,9 @@ jobs:
       - name: Test protovalidate adapter (nested module)
         working-directory: protovalidate
         run: go test -race -count=1 ./...
+
+      - name: Test Connect interceptor (nested module)
+        working-directory: protocheckconnect
+        run: |
+          go vet ./...
+          go test -race -count=1 ./...

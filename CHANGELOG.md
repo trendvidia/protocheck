@@ -6,6 +6,17 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`protocheckconnect`, a ConnectRPC interceptor** (#21), in its own nested
+  module so protocheck takes no Connect dependency. It follows RFC-001 §6.6:
+  the receiver of a message validates it, an invalid request is
+  `CodeInvalidArgument`, an invalid response is `CodeInternal`, and an invalid
+  stream message ends the stream. Errors carry the
+  `protowire.schema.v1.Report` as a detail (`ReportOf`); `WithErrorFunc`
+  substitutes your own, and `WithSenderValidation` also checks outgoing
+  messages. Versioned on its own, with `protocheckconnect/v0.x` tags.
+
 ### Fixed
 
 - **`New()` enforces `@validate`, `@required` and `@default` rules with no
