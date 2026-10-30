@@ -117,6 +117,7 @@ func (v *Validator) carrierFor(file protoreflect.FileDescriptor) (*carrierIndex,
 			files = append(files, fd)
 		}
 	}
+	v.storeFunctionParams(files)
 	index, err := buildCarrierIndex(append(files, v.listed...))
 	if err != nil {
 		err = fmt.Errorf("protocheck: loading rules for %s: %w", file.Path(), err)
