@@ -3,10 +3,12 @@
 Copied verbatim from trendvidia/protowire (MIT):
 
 - `schema-extensions/` — conformance fixtures 01-06 and 24 (`testdata/schema-extensions/`)
-- `protowire/schema/v1/annotations.proto` — the canonical annotation library (`proto/schema/v1/`)
 
 Used as compile inputs for the carrier-dispatch tests. Re-copy when the
-upstream fixtures change.
+upstream fixtures change. The annotation libraries they import
+(`protowire/schema/v1/annotations.proto`, `pxf/annotations.proto`) are
+not copied: the tests read them from `protos.Files` in
+github.com/trendvidia/protos, at the version `go.mod` pins.
 
 ## Local delta (remove when upstream syncs)
 
