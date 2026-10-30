@@ -36,6 +36,9 @@ type Validator struct {
 	// schema fully-qualified name, including Unimplemented placeholders
 	// installed by lenient init-time verification.
 	spiFuncs map[string]*registeredFunc
+	// fnParams maps a declared function's FQN to its numeric parameter
+	// types ([]string), as functionParams reads them from the descriptors.
+	fnParams sync.Map
 
 	// carrier indexes the RFC-001 carrier rules (@required/@default/
 	// @validate, extension 1327) of the descriptors passed via
@@ -52,6 +55,12 @@ type Validator struct {
 	// checkExprs caches Check expressions compiled for the built-in
 	// language (no expression engine), keyed by source.
 	checkExprs sync.Map
+}
+
+func (v *Validator) storeFunctionParams(files []protoreflect.FileDescriptor) {
+	for fqn, types := range functionParams(files) {
+		v.fnParams.Store(fqn, types)
+	}
 }
 
 // registeredFunc is one registry entry. placeholder marks an Unimplemented
@@ -97,6 +106,7 @@ func New(opts ...Option) (*Validator, error) {
 			return nil, err
 		}
 	}
+	v.storeFunctionParams(v.listed)
 	carrier, err := buildCarrierIndex(v.listed)
 	if err != nil {
 		return nil, err

@@ -172,9 +172,9 @@ func TestDefinedOnOptionalEnum(t *testing.T) {
 	}
 }
 
-// A declared function still receives an enum as the plain int it always
-// has: the enum type the binding carries for defined() stays inside the
-// language.
+// A declared function never sees the enum type the binding carries for
+// defined(): that stays inside the language, and the value arrives as its
+// number in the parameter's declared type.
 func TestDeclaredFunctionGetsEnumAsInt(t *testing.T) {
 	var got []any
 	v, fd := enumRulesValidator(t, WithFunction("t.mode_seen", Function(func(args []any) (bool, *Violation) {
@@ -187,8 +187,8 @@ func TestDeclaredFunctionGetsEnumAsInt(t *testing.T) {
 	m.Set(md.Fields().ByName("mode2"), protoreflect.ValueOfEnum(1))
 	m.Set(md.Fields().ByName("seen"), protoreflect.ValueOfEnum(2))
 	v.validate(runInstant, &carrierRun{index: v.carrier}, nil, m)
-	if len(got) != 1 || got[0] != 2 {
-		t.Fatalf("mode_seen args = %#v, want []any{int(2)}", got)
+	if len(got) != 1 || got[0] != int32(2) {
+		t.Fatalf("mode_seen args = %#v, want []any{int32(2)}", got)
 	}
 }
 

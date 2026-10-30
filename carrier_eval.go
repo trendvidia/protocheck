@@ -26,6 +26,10 @@ func (v *Validator) callFunction(fqn string, args []any) (bool, *Violation) {
 	if !ok {
 		return UnimplementedFunction(fqn)(args)
 	}
+	args, viol := v.convertArgs(fqn, args)
+	if viol != nil {
+		return false, viol
+	}
 	return rf.impl(args)
 }
 

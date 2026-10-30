@@ -24,6 +24,17 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   protocheck ignored it, so a schema that carries it starts refusing an empty
   oneof.
 
+### Changed
+
+- **Declared functions receive numbers in their declared type** (RFC-001 §9.1,
+  trendvidia/protobuf-go#11). A function declared with an `int32`, `int64`,
+  `uint32`, `float` or wrapper parameter now gets that Go type, from a field and
+  from a literal alike. Before, an integer field arrived as `int` and a literal
+  as `int64`, so stubs from `protoc-gen-go` rejected valid data with
+  `protowire.function.invalid_argument`. A value that doesn't fit, such as an
+  oversized literal, now fails with that code. A hand-written function that
+  asserts `args[0].(int)` on a declared numeric parameter must change.
+
 ### Fixed
 
 - **Null counts as present for `@required`, `@validate` and `@default`** (#25,
