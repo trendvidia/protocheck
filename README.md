@@ -474,6 +474,28 @@ A function no one registered fails closed: a rule that calls it fails with
 one. So does a rule that cannot be loaded: `Validate` returns an error that is
 not a `*ValidationError`, and the message counts as not validated.
 
+A leading `@required` on a oneof means one of its members must be set:
+
+```protobuf
+message Payment {
+  @required
+  oneof method {
+    string card = 1;
+    string transfer = 2;
+  }
+}
+```
+
+It reports `protowire.required` with a path ending in the oneof's name, and it
+needs no `(protocheck.oneof)` bracket.
+
+Null counts as present. A field or oneof member a PXF document set to null
+satisfies `@required`, runs no `@validate` rule and takes no `@default`.
+protocheck reads this from the message's `_null` mask, so it needs a schema
+with the mask (`pxf build` adds it) and a decode with `pxf.UnmarshalFull`,
+because `pxf.Unmarshal` records no nulls. Without those, a null looks absent.
+Bracket rules do not read the mask.
+
 Add `WithDescriptors` to find those problems at startup. `New` then checks the
 listed files and their imports, and `WithStrictValidation` makes a missing
 function fail `New`. `WithStrictValidation` only covers files that

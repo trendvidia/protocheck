@@ -17,7 +17,20 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   substitutes your own, and `WithSenderValidation` also checks outgoing
   messages. Versioned on its own, with `protocheckconnect/v0.x` tags.
 
+- **`@required` on a oneof** (#22, RFC-001 §5.2 as amended by
+  trendvidia/protowire#451). A leading `@required` on a oneof means a member
+  must be present. It reports `protowire.required`, with a path ending in the
+  oneof's name and `field_number` 0. The annotation already compiled, and
+  protocheck ignored it, so a schema that carries it starts refusing an empty
+  oneof.
+
 ### Fixed
+
+- **Null counts as present for `@required`, `@validate` and `@default`** (#25,
+  RFC-001 §6.1). protocheck never read the `_null` mask, so a field a PXF
+  document set to null looked absent: `@required` refused it and `@default`
+  replaced it. Rules now skip it. Needs a schema with the mask and a decode
+  with `pxf.UnmarshalFull`. Bracket rules are unchanged.
 
 - **`New()` enforces `@validate`, `@required` and `@default` rules with no
   option** (#20). They used to run only for files listed in

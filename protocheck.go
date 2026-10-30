@@ -156,7 +156,7 @@ func (v *Validator) Validate(msg proto.Message) error {
 	if err != nil {
 		return err
 	}
-	violations := v.validate(now, carrier, nil, root)
+	violations := v.validate(now, newCarrierRun(carrier, root), nil, root)
 	if len(violations) > 0 {
 		if v.failFast {
 			// The walk short-circuits at loop boundaries but a single rule
@@ -170,7 +170,7 @@ func (v *Validator) Validate(msg proto.Message) error {
 }
 
 // validate recursively validates a message and returns all violations.
-func (v *Validator) validate(now time.Time, carrier *carrierIndex, path FieldPath, msg protoreflect.Message) []*EnrichedViolation {
+func (v *Validator) validate(now time.Time, run *carrierRun, path FieldPath, msg protoreflect.Message) []*EnrichedViolation {
 	if !msg.IsValid() {
 		return nil
 	}
@@ -179,8 +179,8 @@ func (v *Validator) validate(now time.Time, carrier *carrierIndex, path FieldPat
 	var violations []*EnrichedViolation
 
 	// ── RFC-001 carrier rules (@required / @default / @validate) ─────────
-	if carrier != nil {
-		violations = append(violations, v.validateCarrierRules(now, carrier, path, msg)...)
+	if run.index != nil {
+		violations = append(violations, v.validateCarrierRules(now, run, path, msg)...)
 		if v.failFast && len(violations) > 0 {
 			return violations
 		}
@@ -239,7 +239,7 @@ func (v *Validator) validate(now time.Time, carrier *carrierIndex, path FieldPat
 			// fields, list elements, and map values — are validated
 			// against their own message's constraints.
 			if containsMessages(fd) {
-				violations = append(violations, v.validateField(now, carrier, path.child(segmentOf(fd)), fd, msg.Get(fd), nil)...)
+				violations = append(violations, v.validateField(now, run, path.child(segmentOf(fd)), fd, msg.Get(fd), nil)...)
 				if v.failFast && len(violations) > 0 {
 					return violations
 				}
@@ -284,7 +284,7 @@ func (v *Validator) validate(now time.Time, carrier *carrierIndex, path FieldPat
 
 		val := msg.Get(fd)
 
-		violations = append(violations, v.validateField(now, carrier, fieldPath, fd, val, fc)...)
+		violations = append(violations, v.validateField(now, run, fieldPath, fd, val, fc)...)
 		if v.failFast && len(violations) > 0 {
 			return violations
 		}
@@ -294,7 +294,7 @@ func (v *Validator) validate(now time.Time, carrier *carrierIndex, path FieldPat
 }
 
 // validateField applies type-specific rules and custom expressions to a single field.
-func (v *Validator) validateField(now time.Time, carrier *carrierIndex, path FieldPath, fd protoreflect.FieldDescriptor, val protoreflect.Value, fc *pb.FieldConstraints) []*EnrichedViolation {
+func (v *Validator) validateField(now time.Time, run *carrierRun, path FieldPath, fd protoreflect.FieldDescriptor, val protoreflect.Value, fc *pb.FieldConstraints) []*EnrichedViolation {
 	var violations []*EnrichedViolation
 
 	// ── Repeated fields ──────────────────────────────────────────────────
@@ -354,7 +354,7 @@ func (v *Validator) validateField(now time.Time, carrier *carrierIndex, path Fie
 			elemVal := list.Get(j)
 			elemPath := path.subscript(listSubscript(keyFd, elemVal, j))
 			if fd.Kind() == protoreflect.MessageKind {
-				violations = append(violations, v.validate(now, carrier, elemPath, elemVal.Message())...)
+				violations = append(violations, v.validate(now, run, elemPath, elemVal.Message())...)
 				if rr.GetItems() != nil {
 					for _, expr := range rr.GetItems().Check {
 						if viol := v.evalElementExpression(now, elemPath, elemVal.Message(), expr); viol != nil {
@@ -399,7 +399,7 @@ func (v *Validator) validateField(now time.Time, carrier *carrierIndex, path Fie
 			// constraints, then against the values check rules (#73);
 			// scalar values need declared values rules.
 			if valKind == protoreflect.MessageKind {
-				violations = append(violations, v.validate(now, carrier, entryPath, mval.Message())...)
+				violations = append(violations, v.validate(now, run, entryPath, mval.Message())...)
 				for _, expr := range mr.GetValues().GetCheck() {
 					if viol := v.evalElementExpression(now, entryPath, mval.Message(), expr); viol != nil {
 						violations = append(violations, viol)
@@ -420,7 +420,7 @@ func (v *Validator) validateField(now time.Time, carrier *carrierIndex, path Fie
 	// rules to the message value when it is set (#68; an absent field skips
 	// validation, RFC-001 §6.1).
 	if fd.Kind() == protoreflect.MessageKind {
-		violations = append(violations, v.validate(now, carrier, path, val.Message())...)
+		violations = append(violations, v.validate(now, run, path, val.Message())...)
 		if !val.Message().IsValid() {
 			return violations
 		}
