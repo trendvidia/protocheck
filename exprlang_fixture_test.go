@@ -28,6 +28,8 @@ func fxInRegion(args []any) (bool, *protocheck.Violation) {
 
 func fxTrue([]any) (bool, *protocheck.Violation) { return true, nil }
 
+func fxFalse([]any) (bool, *protocheck.Violation) { return false, nil }
+
 // newProfile builds a fixtures.exprlang.Profile that satisfies every rule
 // of fixture 24, with `expires` at the given instant.
 func newProfile(t *testing.T, fd protoreflect.FileDescriptor, expires time.Time, age int32) proto.Message {
@@ -55,6 +57,8 @@ func newProfile(t *testing.T, fd protoreflect.FileDescriptor, expires time.Time,
 	tags.Append(protoreflect.ValueOfString("golang"))
 	tags.Append(protoreflect.ValueOfString("protobuf"))
 	msg.Mutable(field("limits")).Map().Set(protoreflect.ValueOfString("rps").MapKey(), protoreflect.ValueOfInt32(100))
+	msg.Set(field("mode"), protoreflect.ValueOfEnum(1)) // MODE_MATCH
+	msg.Set(field("slug"), protoreflect.ValueOfString("alice-1"))
 	exp := msg.Mutable(field("expires")).Message()
 	exp.Set(exp.Descriptor().Fields().ByName("seconds"), protoreflect.ValueOfInt64(expires.Unix()))
 	exp.Set(exp.Descriptor().Fields().ByName("nanos"), protoreflect.ValueOfInt32(int32(expires.Nanosecond())))
@@ -70,6 +74,7 @@ func TestFixture24ExpressionLanguage(t *testing.T) {
 	v, err := protocheck.New(
 		protocheck.WithFunction("fixtures.exprlang.in_region", protocheck.Function(fxInRegion)),
 		protocheck.WithFunction("fixtures.exprlang.same_domain", protocheck.Function(fxTrue)),
+		protocheck.WithFunction("fixtures.exprlang.reserved_slug", protocheck.Function(fxFalse)),
 		protocheck.WithDescriptors(fd),
 		protocheck.WithStrictValidation(),
 	)
@@ -99,6 +104,39 @@ func TestFixture24ExpressionLanguage(t *testing.T) {
 	got = carrierViolations(t, v, newProfile(t, fd, time.Now().Add(time.Hour), 42))
 	if len(got) != 1 || !strings.Contains(fmt.Sprint(got[0].Path), "age") {
 		t.Fatalf("expected exactly the age violation, got %v", got)
+	}
+
+	// The enum-name rule on mode (#11): 2 is MODE_REGULATE, named
+	// package-qualified, and passes; 7 is not a declared value.
+	for _, tc := range []struct {
+		num  int32
+		want int
+	}{{2, 0}, {7, 1}} {
+		msg := newProfile(t, fd, time.Now().Add(time.Hour), 30)
+		md := msg.ProtoReflect().Descriptor()
+		msg.ProtoReflect().Set(md.Fields().ByName("mode"), protoreflect.ValueOfEnum(protoreflect.EnumNumber(tc.num)))
+		got := carrierViolations(t, v, msg)
+		if len(got) != tc.want || (tc.want == 1 && !strings.Contains(fmt.Sprint(got[0].Path), "mode")) {
+			t.Errorf("mode = %d: got %v, want %d violation(s) on mode", tc.num, got, tc.want)
+		}
+	}
+
+	// unique() in both forms on tags: a repeated tag fails the field's rule.
+	msg := newProfile(t, fd, time.Now().Add(time.Hour), 30)
+	tags := msg.ProtoReflect().Mutable(msg.ProtoReflect().Descriptor().Fields().ByName("tags")).List()
+	tags.Append(protoreflect.ValueOfString("golang"))
+	got = carrierViolations(t, v, msg)
+	if len(got) != 1 || !strings.Contains(fmt.Sprint(got[0].Path), "tags") {
+		t.Errorf("duplicate tag: got %v, want exactly the tags violation", got)
+	}
+
+	// slug_rule is a user-declared annotation, so its expression is data
+	// for the annotation's owner, not a rule (RFC-001 §5.4, protowire#440):
+	// a slug its default would refuse still yields no violation.
+	msg = newProfile(t, fd, time.Now().Add(time.Hour), 30)
+	msg.ProtoReflect().Set(msg.ProtoReflect().Descriptor().Fields().ByName("slug"), protoreflect.ValueOfString("NOT A SLUG"))
+	if got := carrierViolations(t, v, msg); len(got) != 0 {
+		t.Errorf("slug_rule evaluated: got %v, want no violation (only @validate is a rule)", got)
 	}
 }
 

@@ -4,9 +4,13 @@
 // Fixture: 24_expression_language
 // Exercises: the normative expression language (§5.4, issue #282) —
 // every builtin in both its method form and its function form,
-// now() against a Timestamp field, every operator, every literal
-// kind, nested parentheses, a declared-function call, and a type
-// alias rule propagated onto a repeated field (§6.4: per element).
+// now() against a Timestamp field, is_nan() in both forms on a double
+// field, every operator, every literal
+// kind, nested parentheses, a declared-function call, a type
+// alias rule propagated onto a repeated field (§6.4: per element),
+// enum value names in all three spellings with defined() and unique()
+// in both forms (issue #427), and an `expression`-typed annotation
+// default that calls a declared function (§5.1, issue #437).
 //
 // Expected behavior (compile + lowering only; evaluation is pinned by
 // the reference engine's own suite, so there is no golden):
@@ -18,6 +22,16 @@
 //     Expression.calls names exactly the declared-function calls
 //     (`in_region` on `country`, `same_domain` on the message) —
 //     never a builtin, never `now()`.
+//   - The rule on `mode` lowers with Expression.enum_values listing
+//     each distinct spelling once, in source order, resolved:
+//     `MODE_MATCH`, `fixtures.exprlang.MODE_REGULATE` and
+//     `Mode.MODE_UNSPECIFIED`, each to enum `fixtures.exprlang.Mode`
+//     with its value name and number (1, 2, 0).
+//   - `slug_rule`'s default lowers like an argument: its
+//     Expression.calls names `fixtures.exprlang.reserved_slug` with
+//     arity 1, and `matches` is not extracted. `slug_rule` is a
+//     user-declared annotation, so an engine does not evaluate it
+//     (§5.4, issue #440): no `slug` value produces a violation.
 //   - The alias rule on `Tag` propagates onto `tags` and evaluates per
 //     element with `this` bound to each string; the field's own rule
 //     on `tags` sees the whole list.
@@ -31,6 +45,18 @@ import "protowire/schema/v1/annotations.proto";
 
 function in_region(value: string, regions: string);
 function same_domain(profile: Profile);
+function reserved_slug(value: string);
+
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+  MODE_MATCH = 1;
+  MODE_REGULATE = 2;
+}
+
+// An expression default is captured and checked like an argument, so
+// it can call a function; its names resolve from this declaration's
+// scope.
+annotation slug_rule(rule: expression = matches(this, "^[a-z0-9-]+$") && !reserved_slug(this));
 
 // Method form and function form of the same builtin are the same call.
 type Tag = string @validate(this.size() >= 2 && size(this) <= 16);
@@ -52,7 +78,8 @@ message Profile {
     @validate(this >= 0 && this < 150 && this != 42);
 
   double score = 5
-    @validate((this > 0.0 && this <= 1.0) || (this == 2.5));
+    @validate((this > 0.0 && this <= 1.0) || (this == 2.5))
+    @validate(!this.is_nan() && !is_nan(this));
 
   bool verified = 6
     @validate(this == true || this == false);
@@ -61,11 +88,18 @@ message Profile {
     @validate(this.size() == 32);
 
   repeated Tag tags = 8
-    @validate(size(this) <= 5);
+    @validate(size(this) <= 5)
+    @validate(this.unique() && unique(this));
 
   map<string, int32> limits = 9
     @validate(this.size() > 0);
 
   google.protobuf.Timestamp expires = 10
     @validate(this > now());
+
+  // An enum value by name: bare, package-qualified and enum-qualified.
+  Mode mode = 11
+    @validate(this in [MODE_MATCH, fixtures.exprlang.MODE_REGULATE] && this != Mode.MODE_UNSPECIFIED && this.defined() && defined(this));
+
+  string slug = 12 @slug_rule;
 }
