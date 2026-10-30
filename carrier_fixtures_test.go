@@ -662,3 +662,103 @@ func TestFixture06CrossFile(t *testing.T) {
 		t.Fatalf("fail-fast: expected exactly 1 violation, got %v", got)
 	}
 }
+
+// ─── Fixture 25: @required on a oneof ───────────────────────────────────────
+
+func TestFixture25RequiredOneof(t *testing.T) {
+	fd := compileFixtures(t, "25_required_oneof.proto")["25_required_oneof.proto"]
+	v, err := protocheck.New(protocheck.WithDescriptors(fd), protocheck.WithStrictValidation())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+
+	got := carrierViolations(t, v, newDynamic(t, fd, "Payment", nil))
+	if len(got) != 1 {
+		t.Fatalf("empty Payment: %v, want one violation", got)
+	}
+	viol := got[0]
+	if viol.Cause.Code != protocheck.CodeRequired || viol.RuleKind != protocheck.RuleKindRequired {
+		t.Errorf("code %q kind %v", viol.Cause.Code, viol.RuleKind)
+	}
+	if len(viol.Path) != 1 || viol.Path[0].FieldName != "method" || viol.Path[0].FieldNumber != 0 {
+		t.Errorf("path = %+v, want one segment {method, 0}", viol.Path)
+	}
+	if viol.Source == nil || viol.Source.File != "25_required_oneof.proto" || viol.Source.Line != 27 {
+		t.Errorf("source = %v, want the oneof's declaration", viol.Source)
+	}
+
+	// Either member satisfies it, and the active member's own rules still run.
+	if got := carrierViolations(t, v, newDynamic(t, fd, "Payment", map[string]string{"transfer": "t"})); len(got) != 0 {
+		t.Errorf("transfer set: %v", got)
+	}
+	if got := carrierViolations(t, v, newDynamic(t, fd, "Payment", map[string]string{"card": "c"})); len(got) != 0 {
+		t.Errorf("card set: %v", got)
+	}
+	// Fail-fast reports the oneof as its one violation.
+	ff, err := protocheck.New(protocheck.WithDescriptors(fd), protocheck.WithFailFast())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ff.Close()
+	if got := violationCodes(carrierViolations(t, ff, newDynamic(t, fd, "Payment", nil))); got != "method=protowire.required" {
+		t.Errorf("fail-fast: %s", got)
+	}
+
+	// The other oneof has no @required, so setting only it changes nothing.
+	got = carrierViolations(t, v, newDynamic(t, fd, "Payment", map[string]string{"memo": "m"}))
+	if len(got) != 1 || got[0].Path[0].FieldName != "method" {
+		t.Errorf("memo only: %v, want method required", got)
+	}
+}
+
+// The bracket rule is the oracle: the annotation refuses exactly what it does.
+// The two differ in code only (required vs protowire.required).
+func TestRequiredOneofAgreesWithBracket(t *testing.T) {
+	const src = `syntax = "proto3";
+package agree;
+
+import "protocheck/protocheck.proto";
+import "protowire/schema/v1/annotations.proto";
+
+message Annotated {
+  @required
+  oneof pick {
+    string a = 1;
+    string b = 2;
+    string c = 3;
+  }
+  string other = 4;
+}
+
+message Bracket {
+  oneof pick {
+    option (protocheck.oneof).required = true;
+    string a = 1;
+    string b = 2;
+    string c = 3;
+  }
+  string other = 4;
+}
+`
+	fd := compileProtos(t, map[string]string{"agree.proto": src}, "agree.proto")["agree.proto"]
+	v, err := protocheck.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+
+	for _, fields := range []map[string]string{nil, {"other": "x"}, {"a": "x"}, {"b": ""}, {"c": "x", "other": "y"}} {
+		annotated := carrierViolations(t, v, newDynamic(t, fd, "Annotated", fields))
+		bracket := carrierViolations(t, v, newDynamic(t, fd, "Bracket", fields))
+		if len(annotated) != len(bracket) {
+			t.Errorf("%v: annotated %v, bracket %v", fields, annotated, bracket)
+			continue
+		}
+		for i := range annotated {
+			if annotated[i].Path.String() != bracket[i].Path.String() || annotated[i].RuleKind != bracket[i].RuleKind {
+				t.Errorf("%v: annotated %v, bracket %v", fields, annotated[i], bracket[i])
+			}
+		}
+	}
+}

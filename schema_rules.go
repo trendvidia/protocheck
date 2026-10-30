@@ -54,10 +54,19 @@ type messageCarrierRules struct {
 	checks []*carrierRule
 	fields map[protoreflect.Name]*fieldCarrierRules
 
+	// requiredOneofs lists the oneofs carrying @required (RFC-001 §5.2).
+	requiredOneofs []requiredOneof
+
 	// sensitive marks a message whose fields are all @sensitive (RFC-001
 	// §6.7) — set directly or inherited transitively through
 	// message-typed fields of a sensitive message.
 	sensitive bool
+}
+
+// requiredOneof is a oneof that must have a member present.
+type requiredOneof struct {
+	name protoreflect.Name
+	rule *carrierRule
 }
 
 type fieldCarrierRules struct {
@@ -295,6 +304,29 @@ func (b *indexBuilder) indexMessage(md protoreflect.MessageDescriptor, smFile st
 		}
 	}
 
+	oneofs := md.Oneofs()
+	for i := 0; i < oneofs.Len(); i++ {
+		od := oneofs.Get(i)
+		if od.IsSynthetic() {
+			continue // skip proto3 optional synthetic oneofs
+		}
+		list := readExtension(od.Options(), schemav1.E_OneofAnnotations, func() *schemav1.AnnotationList { return &schemav1.AnnotationList{} })
+		for _, ann := range list.GetEntries() {
+			if ann.GetName() != annRequired {
+				continue
+			}
+			source, ref := b.lookupSource(string(od.FullName()), annRequired, 0, smFile, sm)
+			if declLoc := declLocation(od); declLoc != nil {
+				source = declLoc
+			}
+			mr.requiredOneofs = append(mr.requiredOneofs, requiredOneof{
+				name: od.Name(),
+				rule: &carrierRule{kind: RuleKindRequired, source: source, ref: ref},
+			})
+			break
+		}
+	}
+
 	fields := md.Fields()
 	for i := 0; i < fields.Len(); i++ {
 		fd := fields.Get(i)
@@ -325,7 +357,7 @@ func (b *indexBuilder) indexMessage(md protoreflect.MessageDescriptor, smFile st
 		}
 	}
 
-	if len(mr.checks) > 0 || len(mr.fields) > 0 || mr.sensitive {
+	if len(mr.checks) > 0 || len(mr.fields) > 0 || len(mr.requiredOneofs) > 0 || mr.sensitive {
 		b.out.messages[md.FullName()] = mr
 	}
 

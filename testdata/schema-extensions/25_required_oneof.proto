@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 TrendVidia, LLC.
+//
+// Fixture: 25_required_oneof
+// Exercises: a leading @required on a oneof (§5.2), the only @required a
+// oneof has. Member @required stays invalid.
+//
+// Expected behavior (compile + lowering only; evaluation is pinned by the
+// reference engine's own suite, so there is no golden):
+//   - Every oneof here compiles.
+//   - `Payment.method` carries one `protowire.schema.v1.required` entry in
+//     OneofOptions 1327, and its members carry no 1327 entry for it.
+//   - `Payment.note` carries none: @required is per oneof.
+//   - At validation time: a Payment with no `method` member reports
+//     `protowire.required` with a path ending in the segment
+//     {field_name: "method", field_number: 0} (§7), and a member bound to
+//     null counts as present (§6.1).
+
+syntax = "proto3";
+
+package fixtures.oneofs;
+
+import "protowire/schema/v1/annotations.proto";
+
+message Payment {
+  @required
+  oneof method {
+    string card = 1 @validate(this.size() > 0);
+    string transfer = 2;
+  }
+
+  oneof note {
+    string memo = 3;
+    string reference = 4;
+  }
+
+  optional string payer = 5;
+}
