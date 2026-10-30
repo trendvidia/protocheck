@@ -129,6 +129,15 @@ func TestFixture24ExpressionLanguage(t *testing.T) {
 	if len(got) != 1 || !strings.Contains(fmt.Sprint(got[0].Path), "tags") {
 		t.Errorf("duplicate tag: got %v, want exactly the tags violation", got)
 	}
+
+	// slug_rule is a user-declared annotation, so its expression is data
+	// for the annotation's owner, not a rule (RFC-001 §5.4, protowire#440):
+	// a slug its default would refuse still yields no violation.
+	msg = newProfile(t, fd, time.Now().Add(time.Hour), 30)
+	msg.ProtoReflect().Set(msg.ProtoReflect().Descriptor().Fields().ByName("slug"), protoreflect.ValueOfString("NOT A SLUG"))
+	if got := carrierViolations(t, v, msg); len(got) != 0 {
+		t.Errorf("slug_rule evaluated: got %v, want no violation (only @validate is a rule)", got)
+	}
 }
 
 // ─── Wrappers bind unwrapped (RFC-001 §6.2 rule 1) ─────────────────────────

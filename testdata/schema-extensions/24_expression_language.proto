@@ -29,7 +29,9 @@
 //     with its value name and number (1, 2, 0).
 //   - `slug_rule`'s default lowers like an argument: its
 //     Expression.calls names `fixtures.exprlang.reserved_slug` with
-//     arity 1, and `matches` is not extracted.
+//     arity 1, and `matches` is not extracted. `slug_rule` is a
+//     user-declared annotation, so an engine does not evaluate it
+//     (§5.4, issue #440): no `slug` value produces a violation.
 //   - The alias rule on `Tag` propagates onto `tags` and evaluates per
 //     element with `this` bound to each string; the field's own rule
 //     on `tags` sees the whole list.
