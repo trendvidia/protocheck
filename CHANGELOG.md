@@ -6,6 +6,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.8.0] — 2026-10-30
+
+A minor release for RFC-001 §5.4's new expression features: enum value
+names, `defined()`, `unique()` and `is_nan()` in `@validate` rules
+(#11, #9). Expressions now compare large integers exactly (#10) and
+order NaN the IEEE 754 way (#9), so some values that passed a rule
+before now fail it. A failed rule on an enum reports the value by name.
+protocheck now imports the shared schema types from
+trendvidia/protos and its module graph names no buf.build module.
+
 ### Added
 
 - **Enum value names, `defined()` and `unique()` in `@validate` rules**
@@ -626,6 +636,7 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
 
 - Initial release.
 
-[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.7.1...HEAD
+[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.8.0...HEAD
+[2.8.0]: https://github.com/trendvidia/protocheck/compare/v2.7.1...v2.8.0
 [2.7.1]: https://github.com/trendvidia/protocheck/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/trendvidia/protocheck/releases/tag/v2.7.0
