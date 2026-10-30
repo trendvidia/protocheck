@@ -7,6 +7,7 @@ package protocheck_test
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"regexp"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/trendvidia/protocompile/ir"
 	"github.com/trendvidia/protocompile/report"
 	"github.com/trendvidia/protocompile/source"
+	"github.com/trendvidia/protos"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -52,16 +54,20 @@ func compileProtos(t *testing.T, inline map[string]string, roots ...string) map[
 	t.Helper()
 
 	files := map[string]*source.File{}
-	load := func(importPath, diskPath string) {
-		content, err := os.ReadFile(diskPath)
+	add := func(importPath string, content []byte, err error) {
 		if err != nil {
 			t.Fatal(err)
 		}
 		files[importPath] = source.NewFile(importPath, string(content))
 	}
-	load(annotationsImport, "testdata/"+annotationsImport)
-	load("pxf/annotations.proto", "testdata/pxf/annotations.proto")
-	load("protocheck/protocheck.proto", "proto/protocheck/protocheck.proto")
+	// The annotation libraries come from the protos version go.mod pins,
+	// the files protowire bundles, rather than a copy that can go stale.
+	for _, p := range []string{annotationsImport, "pxf/annotations.proto"} {
+		content, err := fs.ReadFile(protos.Files, p)
+		add(p, content, err)
+	}
+	content, err := os.ReadFile("proto/protocheck/protocheck.proto")
+	add("protocheck/protocheck.proto", content, err)
 	for importPath, content := range inline {
 		files[importPath] = source.NewFile(importPath, content)
 	}

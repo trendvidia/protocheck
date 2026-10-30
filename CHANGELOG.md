@@ -31,7 +31,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - **Dependencies**: protocompile v0.35.1 → v0.36.0, which records enum
   value names in `Expression.enum_values` and checks expression defaults
   and boolean rules (trendvidia/protocompile#275, #286). Adds
-  trendvidia/protos v0.1.1 as an indirect dependency.
+  trendvidia/protos v0.1.2 as a direct dependency: the schema types
+  (`schemav1`) are imported from `github.com/trendvidia/protos` instead of
+  protocompile's alias package `gen/protowire/schema/v1` (#16), so
+  protocheck links no `protocompile/gen` package.
+
+- **Tests compile against the shared schemas in `protos.Files`**, the
+  protos version `go.mod` pins, instead of copies under `testdata/`.
+  `testdata/protowire/schema/v1/annotations.proto` and
+  `testdata/pxf/annotations.proto` are gone, so a protos bump is the only
+  re-sync these files need.
 
 - **A failed `@validate` rule reports an enum value by name** (#11).
   `ActualValue` was the value's number; it is now an `EnumName` holding

@@ -2,6 +2,7 @@ package protocheck
 
 import (
 	"context"
+	"io/fs"
 	"maps"
 	"math"
 	"math/big"
@@ -18,6 +19,7 @@ import (
 	"github.com/trendvidia/protocompile/ir"
 	"github.com/trendvidia/protocompile/report"
 	"github.com/trendvidia/protocompile/source"
+	"github.com/trendvidia/protos"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -144,7 +146,8 @@ func compileInline(t *testing.T, path, src string) protoreflect.FileDescriptor {
 
 // compileInlineWith is compileInline with further library files, keyed by
 // import path and read from the given repository-relative source paths
-// (protocheck/protocheck.proto for bracket rules).
+// (protocheck/protocheck.proto for bracket rules). The annotation library
+// comes from protos.Files, the version go.mod pins.
 func compileInlineWith(t *testing.T, path, src string, libs map[string]string) protoreflect.FileDescriptor {
 	t.Helper()
 	const annotations = "protowire/schema/v1/annotations.proto"
@@ -152,14 +155,20 @@ func compileInlineWith(t *testing.T, path, src string, libs map[string]string) p
 	if libs == nil {
 		libs = map[string]string{}
 	}
-	libs[annotations] = "testdata/" + annotations
+	libs[annotations] = ""
 	byPath := map[string]*source.File{path: source.NewFile(path, src)}
 	var queriesIR []incremental.Query[*ir.File]
 	sess := new(ir.Session)
 	var openers *source.Openers
 	importPaths := slices.Sorted(maps.Keys(libs))
 	for _, imp := range importPaths {
-		lib, err := os.ReadFile(libs[imp])
+		var lib []byte
+		var err error
+		if imp == annotations {
+			lib, err = fs.ReadFile(protos.Files, imp)
+		} else {
+			lib, err = os.ReadFile(libs[imp])
+		}
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,7 +1,7 @@
 package protocheck_test
 
 import (
-	"os"
+	"io/fs"
 	"strings"
 	"testing"
 
@@ -12,6 +12,7 @@ import (
 	"github.com/trendvidia/protocompile/ir"
 	"github.com/trendvidia/protocompile/report"
 	"github.com/trendvidia/protocompile/source"
+	"github.com/trendvidia/protos"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -23,7 +24,7 @@ import (
 // protowire's testdata/schema-extensions/ exercise.
 func compileRFC(t *testing.T, src string) protoreflect.FileDescriptor {
 	t.Helper()
-	annotations, err := os.ReadFile("testdata/protowire/schema/v1/annotations.proto")
+	annotations, err := fs.ReadFile(protos.Files, "protowire/schema/v1/annotations.proto")
 	if err != nil {
 		t.Fatal(err)
 	}
