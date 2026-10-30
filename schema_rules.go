@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/trendvidia/protocompile/fdp"
-	schemav1 "github.com/trendvidia/protocompile/gen/protowire/schema/v1"
+	schemav1 "github.com/trendvidia/protos/protowire/schema/v1"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
