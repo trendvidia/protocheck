@@ -1,19 +1,21 @@
 package protocheck
 
 // Carrier-rule index: the descriptor-load half of RFC-001 §6.4 validation
-// for schemas lowered by the protowire compiler. New() walks the files
-// supplied via WithDescriptors and indexes, per message, the rules carried
-// in the lowered annotation lists (extension 50400) — @required, @default,
-// and @validate uses of the protowire.schema.v1 annotation library —
-// pre-parsing every rule expression. Each rule is joined with the embedded
-// source map (extension 50404) by its canonical descriptor path (RFC-001
+// for schemas lowered by the protowire compiler. New() indexes the files
+// supplied via WithDescriptors and their imports; a message outside them
+// gets the same index built from its own file and imports at first
+// Validate. The index holds, per message, the rules carried in the lowered
+// annotation lists (extension 1327) — @required, @default, and @validate
+// uses of the protowire.schema.v1 annotation library — pre-parsing every
+// rule expression. Each rule is joined with the embedded
+// source map (extension 1331) by its canonical descriptor path (RFC-001
 // §8.3.1, formatted via fdp.DescriptorPath, never hand-assembled), giving
 // violations their Source and SourceRef enrichment.
 //
 // Type-alias provenance: the compiler macro-expands a type alias's rules
 // into the use-site field's annotation list. Each expanded entry keeps the
 // alias declaration's source location, which is matched against the alias's
-// own annotation list (carrier 50403) to attribute the rule to its alias —
+// own annotation list (carrier 1330) to attribute the rule to its alias —
 // those violations report RuleKindTypeRefinement and the field's type
 // chain. Rules evaluate base → derived → field-level (RFC-001 §6.4),
 // regardless of the emitted list order.
@@ -35,8 +37,8 @@ const (
 	annSensitive = "protowire.schema.v1.sensitive"
 )
 
-// carrierIndex holds every carrier rule of the descriptors passed to New,
-// keyed by message full name.
+// carrierIndex holds every carrier rule of a set of files, keyed by message
+// full name.
 type carrierIndex struct {
 	messages map[protoreflect.FullName]*messageCarrierRules
 }
@@ -84,6 +86,67 @@ type carrierRule struct {
 	kind      RuleKind
 	source    *SourceLocation
 	ref       *SourceRef
+}
+
+// ─── Index selection ────────────────────────────────────────────────────────
+
+// rootCarrier is one cached outcome of carrierFor.
+type rootCarrier struct {
+	index *carrierIndex
+	err   error
+}
+
+// carrierFor returns the index a run rooted in a message of file walks with.
+// Every message type reachable through fields is declared in file or its
+// imports (the walk does not unpack Any), so one index serves the whole run.
+//
+// Files reached through WithDescriptors keep the index New built. Any other
+// file adds its own imports to that set; the listed files come last so their
+// descriptors, which may hold source info, win a message name both declare.
+func (v *Validator) carrierFor(file protoreflect.FileDescriptor) (*carrierIndex, error) {
+	if file == nil || v.listedPaths[file.Path()] {
+		return v.carrier, nil
+	}
+	if cached, ok := v.rootCarriers.Load(file); ok {
+		rc := cached.(*rootCarrier)
+		return rc.index, rc.err
+	}
+	var files []protoreflect.FileDescriptor
+	for _, fd := range withImports([]protoreflect.FileDescriptor{file}) {
+		if !v.listedPaths[fd.Path()] {
+			files = append(files, fd)
+		}
+	}
+	index, err := buildCarrierIndex(append(files, v.listed...))
+	if err != nil {
+		err = fmt.Errorf("protocheck: loading rules for %s: %w", file.Path(), err)
+	}
+	v.rootCarriers.Store(file, &rootCarrier{index: index, err: err})
+	return index, err
+}
+
+// withImports returns files followed by everything they import, transitively,
+// each path once. An import that did not resolve (a placeholder) has no rules
+// to read and is left out.
+func withImports(files []protoreflect.FileDescriptor) []protoreflect.FileDescriptor {
+	seen := make(map[string]bool, len(files))
+	out := make([]protoreflect.FileDescriptor, 0, len(files))
+	add := func(fd protoreflect.FileDescriptor) {
+		if !fd.IsPlaceholder() && !seen[fd.Path()] {
+			seen[fd.Path()] = true
+			out = append(out, fd)
+		}
+	}
+	for _, fd := range files {
+		add(fd)
+	}
+	for i := 0; i < len(out); i++ {
+		imports := out[i].Imports()
+		for j := 0; j < imports.Len(); j++ {
+			add(imports.Get(j).FileDescriptor)
+		}
+	}
+	return out
 }
 
 // ─── Index construction ─────────────────────────────────────────────────────

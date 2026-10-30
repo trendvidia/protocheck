@@ -457,6 +457,38 @@ or by any dot-separated suffix that only one registered function has
 (`tempo_ordered`, `v1.tempo_ordered`). If the function returns a
 `*Violation` and the rule has no `message`, the function's message is used.
 
+### `@validate` and `@required` rules
+
+`New()` enforces a schema's `@required`, `@default` and `@validate` rules as
+well as its bracket rules, with no option. It reads them from the descriptor
+of the message being validated and the files that descriptor imports:
+
+```go
+v, err := protocheck.New(
+    protocheck.WithFunction("acme.v1.tempo_ordered", protocheck.Function(tempoOrdered)),
+)
+```
+
+A function no one registered fails closed: a rule that calls it fails with
+`protowire.function.unimplemented`, or with the rule's own `code` if it has
+one. So does a rule that cannot be loaded: `Validate` returns an error that is
+not a `*ValidationError`, and the message counts as not validated.
+
+Add `WithDescriptors` to find those problems at startup. `New` then checks the
+listed files and their imports, and `WithStrictValidation` makes a missing
+function fail `New`. `WithStrictValidation` only covers files that
+`WithDescriptors` reaches. Descriptors that hold source info, such as compiler
+output, also give violations their source locations; the descriptors linked
+into a Go binary have none.
+
+```go
+v, err := protocheck.New(
+    protocheck.WithFunction("acme.v1.tempo_ordered", protocheck.Function(tempoOrdered)),
+    protocheck.WithDescriptors(acmepb.File_acme_v1_song_proto),
+    protocheck.WithStrictValidation(),
+)
+```
+
 ### Other engines
 
 `WithExpressionEngine` plugs in an `ExpressionEngine`

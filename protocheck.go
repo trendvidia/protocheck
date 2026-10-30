@@ -34,9 +34,16 @@ type Validator struct {
 	spiFuncs map[string]*registeredFunc
 
 	// carrier indexes the RFC-001 carrier rules (@required/@default/
-	// @validate, extension 50400) of the descriptors passed via
-	// WithDescriptors; nil when none carry rules.
+	// @validate, extension 1327) of the descriptors passed via
+	// WithDescriptors and their imports; nil when none carry rules.
 	carrier *carrierIndex
+	// listed is the WithDescriptors files and their imports, which carrier
+	// was built from; listedPaths holds their paths.
+	listed      []protoreflect.FileDescriptor
+	listedPaths map[string]bool
+	// rootCarriers caches, per file of a validated message, the index that
+	// run walks with: a *rootCarrier keyed by protoreflect.FileDescriptor.
+	rootCarriers sync.Map
 
 	// checkExprs caches Check expressions compiled for the built-in
 	// language (no expression engine), keyed by source.
@@ -52,11 +59,16 @@ type registeredFunc struct {
 
 // New creates a new Validator. Options can register custom functions.
 //
-// When descriptors are supplied via WithDescriptors, New runs the RFC-001
-// §9.2 init-time verification: every function FQN the schema declares or
-// calls must have a registered implementation. Misses install Unimplemented
-// placeholders that fail at first call — or, with WithStrictValidation,
-// fail New itself.
+// The Validator enforces every rule of a validated message's schema: bracket
+// rules and @required/@default/@validate alike, the latter read from the
+// descriptor of the message's file and its imports at first use.
+//
+// When descriptors are supplied via WithDescriptors, New also runs the
+// RFC-001 §9.2 init-time verification over them and their imports: every
+// function FQN the schema declares or calls must have a registered
+// implementation. Misses install Unimplemented placeholders that fail at
+// first call — or, with WithStrictValidation, fail New itself. A function
+// missing from a file no WithDescriptors reaches fails at first call.
 func New(opts ...Option) (*Validator, error) {
 	cfg := &validatorConfig{}
 	for _, o := range opts {
@@ -73,12 +85,15 @@ func New(opts ...Option) (*Validator, error) {
 	for fqn, impl := range cfg.spiFuncs {
 		v.spiFuncs[fqn] = &registeredFunc{impl: impl}
 	}
-	for _, fd := range cfg.descriptors {
+	v.listed = withImports(cfg.descriptors)
+	v.listedPaths = make(map[string]bool, len(v.listed))
+	for _, fd := range v.listed {
+		v.listedPaths[fd.Path()] = true
 		if err := verifyRegisteredFunctions(fd, v.spiFuncs, cfg.strict); err != nil {
 			return nil, err
 		}
 	}
-	carrier, err := buildCarrierIndex(cfg.descriptors)
+	carrier, err := buildCarrierIndex(v.listed)
 	if err != nil {
 		return nil, err
 	}
@@ -117,13 +132,20 @@ func (v *Validator) Close() error {
 }
 
 // Validate checks the message against all protocheck constraints.
-// Returns nil if valid, or a *ValidationError listing all violations.
+// Returns nil if valid, or a *ValidationError listing all violations. Any
+// other error means msg's schema carries a rule that could not be loaded, so
+// msg was not validated.
 func (v *Validator) Validate(msg proto.Message) error {
 	// One instant per run: every now() inside this Validate call sees
 	// it (RFC-001 §6.2 rule 5), so a rule cannot pass and fail within
 	// one report for equal values.
 	now := time.Now()
-	violations := v.validate(now, nil, msg.ProtoReflect())
+	root := msg.ProtoReflect()
+	carrier, err := v.carrierFor(root.Descriptor().ParentFile())
+	if err != nil {
+		return err
+	}
+	violations := v.validate(now, carrier, nil, root)
 	if len(violations) > 0 {
 		if v.failFast {
 			// The walk short-circuits at loop boundaries but a single rule
@@ -137,7 +159,7 @@ func (v *Validator) Validate(msg proto.Message) error {
 }
 
 // validate recursively validates a message and returns all violations.
-func (v *Validator) validate(now time.Time, path FieldPath, msg protoreflect.Message) []*EnrichedViolation {
+func (v *Validator) validate(now time.Time, carrier *carrierIndex, path FieldPath, msg protoreflect.Message) []*EnrichedViolation {
 	if !msg.IsValid() {
 		return nil
 	}
@@ -146,8 +168,8 @@ func (v *Validator) validate(now time.Time, path FieldPath, msg protoreflect.Mes
 	var violations []*EnrichedViolation
 
 	// ── RFC-001 carrier rules (@required / @default / @validate) ─────────
-	if v.carrier != nil {
-		violations = append(violations, v.validateCarrierRules(now, path, msg)...)
+	if carrier != nil {
+		violations = append(violations, v.validateCarrierRules(now, carrier, path, msg)...)
 		if v.failFast && len(violations) > 0 {
 			return violations
 		}
@@ -206,7 +228,7 @@ func (v *Validator) validate(now time.Time, path FieldPath, msg protoreflect.Mes
 			// fields, list elements, and map values — are validated
 			// against their own message's constraints.
 			if containsMessages(fd) {
-				violations = append(violations, v.validateField(now, path.child(segmentOf(fd)), fd, msg.Get(fd), nil)...)
+				violations = append(violations, v.validateField(now, carrier, path.child(segmentOf(fd)), fd, msg.Get(fd), nil)...)
 				if v.failFast && len(violations) > 0 {
 					return violations
 				}
@@ -251,7 +273,7 @@ func (v *Validator) validate(now time.Time, path FieldPath, msg protoreflect.Mes
 
 		val := msg.Get(fd)
 
-		violations = append(violations, v.validateField(now, fieldPath, fd, val, fc)...)
+		violations = append(violations, v.validateField(now, carrier, fieldPath, fd, val, fc)...)
 		if v.failFast && len(violations) > 0 {
 			return violations
 		}
@@ -261,7 +283,7 @@ func (v *Validator) validate(now time.Time, path FieldPath, msg protoreflect.Mes
 }
 
 // validateField applies type-specific rules and custom expressions to a single field.
-func (v *Validator) validateField(now time.Time, path FieldPath, fd protoreflect.FieldDescriptor, val protoreflect.Value, fc *pb.FieldConstraints) []*EnrichedViolation {
+func (v *Validator) validateField(now time.Time, carrier *carrierIndex, path FieldPath, fd protoreflect.FieldDescriptor, val protoreflect.Value, fc *pb.FieldConstraints) []*EnrichedViolation {
 	var violations []*EnrichedViolation
 
 	// ── Repeated fields ──────────────────────────────────────────────────
@@ -321,7 +343,7 @@ func (v *Validator) validateField(now time.Time, path FieldPath, fd protoreflect
 			elemVal := list.Get(j)
 			elemPath := path.subscript(listSubscript(keyFd, elemVal, j))
 			if fd.Kind() == protoreflect.MessageKind {
-				violations = append(violations, v.validate(now, elemPath, elemVal.Message())...)
+				violations = append(violations, v.validate(now, carrier, elemPath, elemVal.Message())...)
 				if rr.GetItems() != nil {
 					for _, expr := range rr.GetItems().Check {
 						if viol := v.evalElementExpression(now, elemPath, elemVal.Message(), expr); viol != nil {
@@ -366,7 +388,7 @@ func (v *Validator) validateField(now time.Time, path FieldPath, fd protoreflect
 			// constraints, then against the values check rules (#73);
 			// scalar values need declared values rules.
 			if valKind == protoreflect.MessageKind {
-				violations = append(violations, v.validate(now, entryPath, mval.Message())...)
+				violations = append(violations, v.validate(now, carrier, entryPath, mval.Message())...)
 				for _, expr := range mr.GetValues().GetCheck() {
 					if viol := v.evalElementExpression(now, entryPath, mval.Message(), expr); viol != nil {
 						violations = append(violations, viol)
@@ -387,7 +409,7 @@ func (v *Validator) validateField(now time.Time, path FieldPath, fd protoreflect
 	// rules to the message value when it is set (#68; an absent field skips
 	// validation, RFC-001 §6.1).
 	if fd.Kind() == protoreflect.MessageKind {
-		violations = append(violations, v.validate(now, path, val.Message())...)
+		violations = append(violations, v.validate(now, carrier, path, val.Message())...)
 		if !val.Message().IsValid() {
 			return violations
 		}
