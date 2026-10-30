@@ -19,6 +19,10 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// errNilMessage refuses a nil message: there is nothing to validate, and
+// passing it would report a message that does not exist as valid.
+var errNilMessage = errors.New("protocheck: nil message")
+
 // Validator validates protobuf messages against protocheck constraints.
 type Validator struct {
 	exprEngine ExpressionEngine
@@ -133,14 +137,21 @@ func (v *Validator) Close() error {
 
 // Validate checks the message against all protocheck constraints.
 // Returns nil if valid, or a *ValidationError listing all violations. Any
-// other error means msg's schema carries a rule that could not be loaded, so
-// msg was not validated.
+// other error means msg was not validated: it is nil, or a typed nil pointer
+// with no message behind it, or its schema carries a rule that could not be
+// loaded.
 func (v *Validator) Validate(msg proto.Message) error {
 	// One instant per run: every now() inside this Validate call sees
 	// it (RFC-001 §6.2 rule 5), so a rule cannot pass and fail within
 	// one report for equal values.
 	now := time.Now()
+	if msg == nil {
+		return errNilMessage
+	}
 	root := msg.ProtoReflect()
+	if !root.IsValid() {
+		return errNilMessage
+	}
 	carrier, err := v.carrierFor(root.Descriptor().ParentFile())
 	if err != nil {
 		return err

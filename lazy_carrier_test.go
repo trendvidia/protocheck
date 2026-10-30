@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/trendvidia/protocheck/v2"
+	"github.com/trendvidia/protocheck/v2/internal/testpb"
 	schemav1 "github.com/trendvidia/protos/protowire/schema/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -260,4 +261,29 @@ func TestConcurrentFirstValidate(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+// A nil message is refused, not passed as valid: the walk's skip for an unset
+// field must not reach the root.
+func TestNilMessageIsAnError(t *testing.T) {
+	v, err := protocheck.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+
+	for name, msg := range map[string]proto.Message{
+		"nil":       nil,
+		"typed nil": (*testpb.User)(nil),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var ve *protocheck.ValidationError
+			if err := v.Validate(msg); err == nil || errors.As(err, &ve) {
+				t.Errorf("Validate = %v, want a non-ValidationError error", err)
+			}
+			if _, err := v.Engine().Validate(msg); err == nil {
+				t.Error("Engine().Validate accepted a nil message")
+			}
+		})
+	}
 }

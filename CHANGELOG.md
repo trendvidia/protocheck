@@ -22,6 +22,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `WithStrictValidation`, a function that only an imported file declares or
   calls must now be registered, or `New` fails.
 
+- **`Validate` refuses a nil message.** `Validate(nil)` panicked, and a typed
+  nil such as `(*pb.Song)(nil)` passed as valid. Both now return an error that
+  is not a `*ValidationError`, from `Engine().Validate` too. An unset
+  message-typed field is unchanged: it is still skipped.
+
 ### Changed
 
 - **`Validate` can return an error that is not a `*ValidationError`**: when a
