@@ -67,7 +67,7 @@ func enumRulesValidator(t *testing.T, opts ...Option) (*Validator, protoreflect.
 // codes runs one validation and returns the violation codes, path:code.
 func codes(v *Validator, msg protoreflect.Message) []string {
 	var out []string
-	for _, viol := range v.validate(runInstant, v.carrier, nil, msg) {
+	for _, viol := range v.validate(runInstant, &carrierRun{index: v.carrier}, nil, msg) {
 		out = append(out, viol.Path.String()+":"+viol.Cause.Code)
 	}
 	return out
@@ -139,7 +139,7 @@ func TestEnumNamesDefinedUnique(t *testing.T) {
 	} {
 		m := valid()
 		tc.build(m)
-		got := v.validate(runInstant, v.carrier, nil, m)
+		got := v.validate(runInstant, &carrierRun{index: v.carrier}, nil, m)
 		if len(got) != 1 || got[0].ActualValue != tc.want {
 			t.Errorf("ActualValue: got %v, want %v (%T)", got, tc.want, tc.want)
 		}
@@ -186,7 +186,7 @@ func TestDeclaredFunctionGetsEnumAsInt(t *testing.T) {
 	m.Set(md.Fields().ByName("mode"), protoreflect.ValueOfEnum(1))
 	m.Set(md.Fields().ByName("mode2"), protoreflect.ValueOfEnum(1))
 	m.Set(md.Fields().ByName("seen"), protoreflect.ValueOfEnum(2))
-	v.validate(runInstant, v.carrier, nil, m)
+	v.validate(runInstant, &carrierRun{index: v.carrier}, nil, m)
 	if len(got) != 1 || got[0] != int32(2) {
 		t.Fatalf("mode_seen args = %#v, want []any{int32(2)}", got)
 	}
@@ -290,7 +290,7 @@ message Parity {
 
 	refused := func(m *dynamicpb.Message) map[string]bool {
 		out := map[string]bool{}
-		for _, viol := range v.validate(runInstant, v.carrier, nil, m) {
+		for _, viol := range v.validate(runInstant, &carrierRun{index: v.carrier}, nil, m) {
 			out[string(viol.Path.String())] = true
 		}
 		return out

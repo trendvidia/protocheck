@@ -34,8 +34,8 @@ func (v *Validator) callFunction(fqn string, args []any) (bool, *Violation) {
 }
 
 // validateCarrierRules evaluates the carrier rules indexed for msg's type.
-func (v *Validator) validateCarrierRules(now time.Time, carrier *carrierIndex, path FieldPath, msg protoreflect.Message) []*EnrichedViolation {
-	mr := carrier.messageOf(msg.Descriptor().FullName())
+func (v *Validator) validateCarrierRules(now time.Time, run *carrierRun, path FieldPath, msg protoreflect.Message) []*EnrichedViolation {
+	mr := run.index.messageOf(msg.Descriptor().FullName())
 	if mr == nil {
 		return nil
 	}
@@ -51,6 +51,28 @@ func (v *Validator) validateCarrierRules(now time.Time, carrier *carrierIndex, p
 		}
 	}
 
+	// ── @required oneofs: a member set or bound to null is present ──────
+	for _, ro := range mr.requiredOneofs {
+		od := msg.Descriptor().Oneofs().ByName(ro.name)
+		if od == nil || msg.WhichOneof(od) != nil || run.anyNull(path, od) {
+			continue
+		}
+		violations = append(violations, &EnrichedViolation{
+			Cause: &Violation{
+				Code:            CodeRequired,
+				FallbackMessage: MsgRequired,
+			},
+			// A oneof is not a field, so its segment has no number (§7).
+			Path:      path.child(FieldPathSegment{FieldName: string(ro.name)}),
+			RuleKind:  RuleKindRequired,
+			Source:    ro.rule.source,
+			SourceRef: ro.rule.ref,
+		})
+		if v.failFast {
+			return violations
+		}
+	}
+
 	// ── Field rules ─────────────────────────────────────────────────────
 	fields := msg.Descriptor().Fields()
 	for i := 0; i < fields.Len(); i++ {
@@ -63,6 +85,10 @@ func (v *Validator) validateCarrierRules(now time.Time, carrier *carrierIndex, p
 		// inherited from the message classification.
 		sensitive := fr.sensitive || mr.sensitive
 		fieldPath := path.child(segmentOf(fd))
+		// A null field is present, runs no rule and takes no @default (§6.1).
+		if run.isNull(fieldPath) {
+			continue
+		}
 		populated := msg.Has(fd)
 
 		if fr.required != nil && !populated {
@@ -214,6 +240,50 @@ func (v *Validator) validateCarrierRules(now time.Time, carrier *carrierIndex, p
 		}
 	}
 	return violations
+}
+
+// carrierRun is what one Validate call's walk reads for carrier rules: the
+// index for its root message, and the fields a PXF document set to null.
+type carrierRun struct {
+	index *carrierIndex
+	nulls map[string]bool // dotted paths from the root's _null mask
+}
+
+// newCarrierRun reads root's _null mask (RFC-001 §8.6). Without it a null and
+// an absent field are the same on the wire. The decoder records every null of
+// a document on the root message and leaves out those under a list element or
+// map value, so paths below one of those never match.
+func newCarrierRun(index *carrierIndex, root protoreflect.Message) *carrierRun {
+	run := &carrierRun{index: index}
+	if index == nil {
+		return run
+	}
+	fd := root.Descriptor().Fields().ByName("_null")
+	if fd == nil || fd.Message() == nil || fd.Message().FullName() != "google.protobuf.FieldMask" || !root.Has(fd) {
+		return run
+	}
+	mask := root.Get(fd).Message()
+	paths := mask.Get(mask.Descriptor().Fields().ByName("paths")).List()
+	run.nulls = make(map[string]bool, paths.Len())
+	for i := 0; i < paths.Len(); i++ {
+		run.nulls[paths.Get(i).String()] = true
+	}
+	return run
+}
+
+func (r *carrierRun) isNull(path FieldPath) bool {
+	return len(r.nulls) > 0 && r.nulls[path.String()]
+}
+
+// anyNull reports whether a member of od at path is bound to null.
+func (r *carrierRun) anyNull(path FieldPath, od protoreflect.OneofDescriptor) bool {
+	fields := od.Fields()
+	for i := 0; i < fields.Len(); i++ {
+		if r.isNull(path.child(segmentOf(fields.Get(i)))) {
+			return true
+		}
+	}
+	return false
 }
 
 // redactIf withholds a violation's captured value when the field is
