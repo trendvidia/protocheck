@@ -6,6 +6,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.10.0] — 2026-10-30
+
+A minor release for `MessageArg`, which generated function stubs with message
+parameters call.
+
 ### Added
 
 - **`MessageArg`** (trendvidia/protobuf-go#5): returns a function's message
@@ -736,7 +741,8 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
 
 - Initial release.
 
-[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.9.0...HEAD
+[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.10.0...HEAD
+[2.10.0]: https://github.com/trendvidia/protocheck/compare/v2.9.0...v2.10.0
 [2.9.0]: https://github.com/trendvidia/protocheck/compare/v2.8.0...v2.9.0
 [2.8.0]: https://github.com/trendvidia/protocheck/compare/v2.7.1...v2.8.0
 [2.7.1]: https://github.com/trendvidia/protocheck/compare/v2.7.0...v2.7.1
