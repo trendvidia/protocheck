@@ -14,8 +14,8 @@ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWD
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/tidwall/btree v1.8.2 h1:mTY5iM4UTh2e80TG7RHDQQmnAY3xGNQA/DbU0olkhkA=
 github.com/tidwall/btree v1.8.2/go.mod h1:jBbTdUWhSZClZWoDg54VnvV7/54modSOzDN7VXftj1A=
-github.com/trendvidia/protocompile v0.37.1-0.20261031110723-c860518e6b82 h1:WDu4o8aFl/1uMSgeYio2qTu1AOyQNzlruV7waTDLhSE=
-github.com/trendvidia/protocompile v0.37.1-0.20261031110723-c860518e6b82/go.mod h1:r/77ZKQWq3b5IzDMIcHEsLWXy9/m/VqmVfBNXw4n63E=
+github.com/trendvidia/protocompile v0.38.0 h1:ZSWRZup/ph4oZbRzyLZdDYMsPbP35kTnM9lCQdrmnVg=
+github.com/trendvidia/protocompile v0.38.0/go.mod h1:r/77ZKQWq3b5IzDMIcHEsLWXy9/m/VqmVfBNXw4n63E=
 github.com/trendvidia/protos v0.1.4 h1:uKa2KUCKDFmAHT0iIuypwoUv+k7dM/u1d1zUWPV00kA=
 github.com/trendvidia/protos v0.1.4/go.mod h1:NPP4w6dOu7BkD8psH0cWJamHHiEpi8QfgP88vKkMXUI=
 github.com/trendvidia/protowire-go v1.13.0 h1:Ody0G05rUqbZ0GuE4gmz+e5sNfYMSlSLEYmZ6xC/QLs=
