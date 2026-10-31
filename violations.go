@@ -123,7 +123,7 @@ func (l *SourceLocation) String() string {
 // its source-map key (RFC-001 §8.3.1): the originating file plus the
 // canonical descriptor path, e.g.
 // "myco.User.email[protowire.schema.v1.validate#1]". DescriptorPath is
-// produced by formatting fdp.DescriptorPath, never hand-assembled, so it
+// produced by formatting descpath.Path, never hand-assembled, so it
 // round-trips through the shared parser.
 type SourceRef struct {
 	File           string
