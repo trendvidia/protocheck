@@ -6,7 +6,7 @@ go 1.26.2
 
 require (
 	connectrpc.com/connect v1.21.1
-	github.com/trendvidia/protocheck/v2 v2.8.1-0.20261030172514-206d9a7dedde
+	github.com/trendvidia/protocheck/v2 v2.9.0
 	github.com/trendvidia/protos v0.1.4
 	google.golang.org/protobuf v1.36.12
 )
