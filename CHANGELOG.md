@@ -6,6 +6,15 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Programs no longer link the proto compiler** (#42). protocheck imported
+  protocompile's `fdp` package to format one descriptor path, which brought in
+  47 protocompile packages, about 2.2 MB of binary. It now imports
+  `fdp/descpath`, which has no dependencies. Descriptor paths in violations are
+  unchanged.
+- **Dependencies**: protocompile v0.37.0 → v0.38.0.
+
 ## [2.10.0] — 2026-10-30
 
 A minor release for `MessageArg`, which generated function stubs with message
