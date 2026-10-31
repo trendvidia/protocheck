@@ -51,6 +51,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   oversized literal, now fails with that code. A hand-written function that
   asserts `args[0].(int)` on a declared numeric parameter must change.
 
+- **Dependencies**: protocompile v0.36.1 → v0.37.0, protowire-go v1.12.1 →
+  v1.13.0 and protos v0.1.2 → v0.1.4, in all three modules. Schemas that place
+  a standard annotation outside RFC-001 §5.2's table, or put `required` and
+  `default` on one field, stop compiling or binding. Maps now count toward
+  `MaxNestingDepth`, so a document nesting them past 50 levels fails to decode.
+
 ### Fixed
 
 - **Null counts as present for `@required`, `@validate` and `@default`** (#25,
