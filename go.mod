@@ -18,3 +18,5 @@ require (
 	golang.org/x/sync v0.24.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260807164820-c8921c73eeea // indirect
 )
+
+require github.com/trendvidia/release-deps-proof v0.0.0-20260101000000-abcdefabcdef
