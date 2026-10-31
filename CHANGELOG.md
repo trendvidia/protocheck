@@ -6,6 +6,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.9.0] — 2026-10-30
+
+A minor release for `protocheckconnect`, a ConnectRPC interceptor (#21),
+`@required` on a oneof (#22) and `WithRegistration` (#26). Rules now run
+without `WithDescriptors` (#20) and treat null as present (#25), so a program
+may start refusing or accepting values it did not before. Strict validation
+now fails at startup on a function only a stub implements (#29). The compiler
+and decoder moved to stricter releases, so some schemas and documents stop
+loading.
+
 ### Added
 
 - **`protocheckconnect`, a ConnectRPC interceptor** (#21), in its own nested
@@ -57,6 +67,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `default` on one field, stop compiling or binding. Maps now count toward
   `MaxNestingDepth`, so a document nesting them past 50 levels fails to decode.
 
+- **`Validate` can return an error that is not a `*ValidationError`**: when a
+  rule outside `WithDescriptors` cannot be loaded, the message is not
+  validated and `Validate` says so (#20). `New` reports the same problem for
+  listed files, as it always has.
+
 ### Fixed
 
 - **Null counts as present for `@required`, `@validate` and `@default`** (#25,
@@ -83,13 +98,6 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   nil such as `(*pb.Song)(nil)` passed as valid. Both now return an error that
   is not a `*ValidationError`, from `Engine().Validate` too. An unset
   message-typed field is unchanged: it is still skipped.
-
-### Changed
-
-- **`Validate` can return an error that is not a `*ValidationError`**: when a
-  rule outside `WithDescriptors` cannot be loaded, the message is not
-  validated and `Validate` says so (#20). `New` reports the same problem for
-  listed files, as it always has.
 
 ## [2.8.0] — 2026-10-30
 
@@ -721,7 +729,8 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
 
 - Initial release.
 
-[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.8.0...HEAD
+[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.9.0...HEAD
+[2.9.0]: https://github.com/trendvidia/protocheck/compare/v2.8.0...v2.9.0
 [2.8.0]: https://github.com/trendvidia/protocheck/compare/v2.7.1...v2.8.0
 [2.7.1]: https://github.com/trendvidia/protocheck/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/trendvidia/protocheck/releases/tag/v2.7.0
