@@ -9,7 +9,7 @@ package protocheck
 // uses of the protowire.schema.v1 annotation library — pre-parsing every
 // rule expression. Each rule is joined with the embedded
 // source map (extension 1331) by its canonical descriptor path (RFC-001
-// §8.3.1, formatted via fdp.DescriptorPath, never hand-assembled), giving
+// §8.3.1, formatted via descpath.Path, never hand-assembled), giving
 // violations their Source and SourceRef enrichment.
 //
 // Type-alias provenance: the compiler macro-expands a type alias's rules
@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/trendvidia/protocompile/fdp"
+	"github.com/trendvidia/protocompile/fdp/descpath"
 	schemav1 "github.com/trendvidia/protos/protowire/schema/v1"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -566,7 +566,7 @@ func declLocation(d protoreflect.Descriptor) *SourceLocation {
 // lookupSource joins a lowered annotation with its source-map entry by the
 // canonical descriptor path.
 func (b *indexBuilder) lookupSource(element, annotation string, ordinal int, smFile string, sm map[string]*schemav1.SourceEntry) (*SourceLocation, *SourceRef) {
-	path := fdp.DescriptorPath{Element: element, Annotation: annotation, Ordinal: ordinal}.String()
+	path := descpath.Path{Element: element, Annotation: annotation, Ordinal: ordinal}.String()
 	entry, ok := sm[path]
 	if !ok {
 		return nil, nil
