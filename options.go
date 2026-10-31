@@ -92,10 +92,9 @@ func WithDescriptors(files ...protoreflect.FileDescriptor) Option {
 // fn should only register: the Validator is not ready to validate until New
 // returns. An error from fn fails New.
 //
-// Verification checks that a name is registered, not what the implementation
-// does. A method inherited from an embedded UnimplementedFunctions is
-// registered by the helper like any other, so it passes WithStrictValidation
-// and fails at first call. Leave the embedding out to have the compiler refuse
+// A method inherited from an embedded Unimplemented stub is registered by the
+// helper like any other. Without WithStrictValidation it fails at first call;
+// with it, New refuses it. Leave the embedding out to have the compiler refuse
 // a missing method instead.
 func WithRegistration(fn func(Engine) error) Option {
 	return func(cfg *validatorConfig) {
@@ -114,6 +113,12 @@ func WithRegistration(fn func(Engine) error) Option {
 // a function FQN required by a WithDescriptors file or one of its imports
 // but missing from the registry fails New instead of being substituted with an Unimplemented
 // placeholder.
+//
+// It also calls each declared function once during New, with zero values of
+// its declared parameter types, and a function that answers
+// CodeFunctionUnimplemented fails New: that finds a method inherited from an
+// embedded Unimplemented stub. Functions are pure (RFC-001 §6.5), so the call
+// is safe. Any other result, including a panic, is ignored.
 func WithStrictValidation() Option {
 	return func(cfg *validatorConfig) {
 		cfg.strict = true
