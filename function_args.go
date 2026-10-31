@@ -44,8 +44,9 @@ func typeAliases(files []protoreflect.FileDescriptor) map[string]string {
 	return aliases
 }
 
-// qualifyParamType resolves a parameter type, which keeps the spelling it was
-// declared with, against the enclosing scopes of the function fqn.
+// qualifyParamType resolves a parameter type against the enclosing scopes of
+// the function fqn. protocompile v0.37.0 writes the full name, which passes
+// through; a descriptor from an earlier compiler keeps the declared spelling.
 func qualifyParamType(name, fqn string, aliases map[string]string) string {
 	for dot := strings.LastIndexByte(fqn, '.'); dot >= 0; dot = strings.LastIndexByte(fqn, '.') {
 		fqn = fqn[:dot]
