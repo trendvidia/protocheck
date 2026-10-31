@@ -8,8 +8,10 @@ import (
 	"math"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -152,4 +154,39 @@ func TestQualifyParamType(t *testing.T) {
 			t.Errorf("qualifyParamType(%s) = %s, want %s", tt.name, got, tt.want)
 		}
 	}
+}
+
+func TestMessageArg(t *testing.T) {
+	want := &fieldmaskpb.FieldMask{Paths: []string{"a", "b"}}
+
+	t.Run("generated", func(t *testing.T) {
+		got, ok := MessageArg[*fieldmaskpb.FieldMask](want)
+		if !ok || got != want {
+			t.Fatalf("got %v, %v; want the same message", got, ok)
+		}
+	})
+
+	t.Run("dynamic", func(t *testing.T) {
+		b, err := proto.Marshal(want)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dyn := dynamicpb.NewMessage(want.ProtoReflect().Descriptor())
+		if err := proto.Unmarshal(b, dyn); err != nil {
+			t.Fatal(err)
+		}
+		got, ok := MessageArg[*fieldmaskpb.FieldMask](dyn)
+		if !ok || !proto.Equal(got, want) {
+			t.Fatalf("got %v, %v; want %v", got, ok, want)
+		}
+	})
+
+	t.Run("refused", func(t *testing.T) {
+		other := dynamicpb.NewMessage((&wrapperspb.StringValue{}).ProtoReflect().Descriptor())
+		for _, v := range []any{nil, "x", 1, other, wrapperspb.String("x")} {
+			if got, ok := MessageArg[*fieldmaskpb.FieldMask](v); ok || got != nil {
+				t.Errorf("MessageArg(%T) = %v, %v; want nil, false", v, got, ok)
+			}
+		}
+	})
 }

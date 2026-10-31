@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	schemav1 "github.com/trendvidia/protos/protowire/schema/v1"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -198,4 +199,33 @@ func (v *Validator) convertArgs(fqn string, args []any) ([]any, *Violation) {
 		out[i] = c
 	}
 	return out, nil
+}
+
+// MessageArg returns v, a message argument of a declared function, as the
+// generated message type T, such as *pb.Inner. RFC-001 §9.1 passes a generated
+// message as itself and a validated dynamic message as a dynamic one, so a
+// plain assertion would refuse the dynamic form; generated stubs call this
+// instead. A dynamic message is copied through its wire form. It reports false
+// when v is not a message of T's type.
+func MessageArg[T proto.Message](v any) (T, bool) {
+	var zero T
+	if t, ok := v.(T); ok {
+		return t, true
+	}
+	m, ok := v.(proto.Message)
+	if !ok {
+		return zero, false
+	}
+	dst := zero.ProtoReflect().New()
+	if m.ProtoReflect().Descriptor().FullName() != dst.Descriptor().FullName() {
+		return zero, false
+	}
+	b, err := proto.MarshalOptions{AllowPartial: true}.Marshal(m)
+	if err != nil {
+		return zero, false
+	}
+	if err := (proto.UnmarshalOptions{AllowPartial: true}).Unmarshal(b, dst.Interface()); err != nil {
+		return zero, false
+	}
+	return dst.Interface().(T), true
 }

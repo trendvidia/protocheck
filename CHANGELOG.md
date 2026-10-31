@@ -6,6 +6,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`MessageArg`** (trendvidia/protobuf-go#5): returns a function's message
+  argument as its generated Go type, from a generated or a dynamic message.
+  Generated stubs from `protoc-gen-pxf-go` call it, so stubs with message
+  parameters need this version.
+
 ## [2.9.0] — 2026-10-30
 
 A minor release for `protocheckconnect`, a ConnectRPC interceptor (#21),
