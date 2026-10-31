@@ -13,14 +13,7 @@ import (
 // each parameter, resolved through type aliases. A parameter that is not a
 // numeric scalar has an empty entry and is passed as it binds.
 func functionParams(files []protoreflect.FileDescriptor) map[string][]string {
-	aliases := make(map[string]string)
-	for _, fd := range files {
-		if decls := readExtension(fd.Options(), schemav1.E_TypeDecls, func() *schemav1.FileTypeDecls { return &schemav1.FileTypeDecls{} }); decls != nil {
-			for _, td := range decls.GetDeclarations() {
-				aliases[td.GetName()] = td.GetBaseTypeFqn()
-			}
-		}
-	}
+	aliases := typeAliases(files)
 	params := make(map[string][]string)
 	for _, fd := range files {
 		fns := readExtension(fd.Options(), schemav1.E_Functions, func() *schemav1.FileFunctions { return &schemav1.FileFunctions{} })
@@ -36,6 +29,19 @@ func functionParams(files []protoreflect.FileDescriptor) map[string][]string {
 		}
 	}
 	return params
+}
+
+// typeAliases maps each `type` declared in files to its base type.
+func typeAliases(files []protoreflect.FileDescriptor) map[string]string {
+	aliases := make(map[string]string)
+	for _, fd := range files {
+		if decls := readExtension(fd.Options(), schemav1.E_TypeDecls, func() *schemav1.FileTypeDecls { return &schemav1.FileTypeDecls{} }); decls != nil {
+			for _, td := range decls.GetDeclarations() {
+				aliases[td.GetName()] = td.GetBaseTypeFqn()
+			}
+		}
+	}
+	return aliases
 }
 
 // qualifyParamType resolves a parameter type, which keeps the spelling it was

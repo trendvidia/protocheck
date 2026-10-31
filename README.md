@@ -500,7 +500,11 @@ Add `WithDescriptors` to find those problems at startup.
 Functions registered by a generated helper go through `WithRegistration`, so
 they are in place before that check runs. `New` then checks the
 listed files and their imports, and `WithStrictValidation` makes a missing
-function fail `New`. `WithStrictValidation` only covers files that
+function fail `New`. That includes a function only an embedded
+`Unimplemented<File>Functions` implements: strict calls each declared function
+once during `New`, with zero values, and refuses any that answers
+`protowire.function.unimplemented`. Functions must be pure (RFC-001 §6.5), so
+that call has no effect. `WithStrictValidation` only covers files that
 `WithDescriptors` reaches. Descriptors that hold source info, such as compiler
 output, also give violations their source locations; the descriptors linked
 into a Go binary have none.

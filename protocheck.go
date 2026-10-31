@@ -113,6 +113,11 @@ func New(opts ...Option) (*Validator, error) {
 		}
 	}
 	v.storeFunctionParams(v.listed)
+	if cfg.strict {
+		if err := v.verifyFunctionsImplemented(v.listed); err != nil {
+			return nil, err
+		}
+	}
 	carrier, err := buildCarrierIndex(v.listed)
 	if err != nil {
 		return nil, err

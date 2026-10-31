@@ -26,11 +26,21 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **`WithRegistration`** (#26): runs a callback on the `Engine` inside `New`,
   before verification, so generated `RegisterFunctions` helpers work with
-  `WithStrictValidation`. Strict checks that a function is registered, not that
-  it does anything: a method inherited from an embedded
-  `UnimplementedFunctions` passes it and fails at first call.
+  `WithStrictValidation`.
 
 ### Changed
+
+- **`WithStrictValidation` refuses a function only a stub implements** (#29,
+  RFC-001 §9.2 as amended by trendvidia/protowire#467). A generated helper
+  registers a method inherited from an embedded `Unimplemented<File>Functions`
+  like any other, so strict passed and the function failed at first call.
+  Strict now calls each declared function once during `New`, with zero values
+  of its declared types, and a function that answers
+  `protowire.function.unimplemented` fails `New`. A project running such a
+  function under strict now fails at startup. Real functions run once more, so
+  one that breaks §6.5 by doing I/O does it during `New`. A panic or any other
+  result is ignored, and a wrapper that rewrites the code still fails at first
+  call.
 
 - **Declared functions receive numbers in their declared type** (RFC-001 §9.1,
   trendvidia/protobuf-go#11). A function declared with an `int32`, `int64`,

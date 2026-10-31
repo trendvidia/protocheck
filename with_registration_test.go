@@ -57,6 +57,7 @@ func TestWithRegistrationSatisfiesStrict(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	defer v.Close()
+	calls = 0 // strict called it once to look for a stub
 
 	msg := newDynamic(t, fd, "Account", map[string]string{"country": "US"})
 	if got := carrierViolations(t, v, msg); len(got) != 0 {
@@ -83,29 +84,6 @@ func TestWithRegistrationMissingFunctionStillFailsNew(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), inRegionFQN) {
 		t.Fatalf("New = %v, want it to name %s", err, inRegionFQN)
-	}
-}
-
-// Pins what strict does not promise: it checks that a name is registered, and
-// an embedded Unimplemented method is registered. The miss surfaces at first
-// call, closed.
-func TestStrictPassesAnEmbeddedUnimplementedMethod(t *testing.T) {
-	fd := compileRFC(t, regionSrc)
-	v, err := protocheck.New(
-		protocheck.WithDescriptors(fd),
-		protocheck.WithRegistration(func(e protocheck.Engine) error {
-			return registerRegionFunctions(e, struct{ unimplementedRegionFunctions }{})
-		}),
-		protocheck.WithStrictValidation(),
-	)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	defer v.Close()
-
-	got := carrierViolations(t, v, newDynamic(t, fd, "Account", map[string]string{"country": "US"}))
-	if s := violationCodes(got); s != "country=account.bad_region" {
-		t.Fatalf("violations = %s", s)
 	}
 }
 
