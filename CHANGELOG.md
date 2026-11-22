@@ -8,6 +8,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
+- **What a function's `Violation` reaches the report with** (#47). The README
+  and `Function`'s doc now say it. A `@validate` rule keeps the function's
+  `Params`, takes its `Code` unless the rule sets `code`, and takes its message
+  unless the rule sets `message`. A bracket `check` rule keeps only the message,
+  and only when the rule has none. A test pins the `@validate` behaviour.
 - **`@validate` skips an unpopulated field** (#46). The README now says that a
   `@validate` rule does not run on a field that is not populated and has no
   `@default`, and that a proto3 scalar without `optional` holding its zero value
