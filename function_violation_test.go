@@ -78,3 +78,69 @@ func TestValidateKeepsFunctionViolation(t *testing.T) {
 		})
 	}
 }
+
+// A bracket check rule keeps a function's Violation the same way: its Params
+// always, with "expression" added; its Code unless the rule has an id; its
+// message unless the rule sets one (#47).
+const fnCheckSrc = `syntax = "proto3";
+package fncheck;
+
+import "protocheck/protocheck.proto";
+
+message NoID {
+  option (protocheck.message) = { check: [{ expression: "refuse(this)" }] };
+}
+
+message WithID {
+  option (protocheck.message) = { check: [{ id: "rule.code", expression: "refuse(this)" }] };
+}
+
+message WithIDAndMessage {
+  option (protocheck.message) = {
+    check: [{ id: "rule.code", message: "rule message", expression: "refuse(this)" }]
+  };
+}
+`
+
+func TestCheckKeepsFunctionViolation(t *testing.T) {
+	fd := compileProtos(t, map[string]string{"fncheck.proto": fnCheckSrc}, "fncheck.proto")["fncheck.proto"]
+	v, err := protocheck.New(protocheck.WithFunction("fncheck.refuse",
+		protocheck.Function(func([]any) (bool, *protocheck.Violation) {
+			return false, &protocheck.Violation{
+				Code:            "fn.code",
+				Params:          map[string]any{"bpm": 0.0, "expression": "from the function"},
+				FallbackMessage: "fn message",
+			}
+		})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+
+	wantParams := map[string]any{"bpm": 0.0, "expression": "refuse(this)"}
+	for _, tc := range []struct {
+		message, code, msg string
+	}{
+		{"NoID", "fn.code", "fn message"},
+		{"WithID", "rule.code", "fn message"},
+		{"WithIDAndMessage", "rule.code", "rule message"},
+	} {
+		t.Run(tc.message, func(t *testing.T) {
+			md := fd.Messages().ByName(protoreflect.Name(tc.message))
+			got := carrierViolations(t, v, dynamicpb.NewMessage(md))
+			if len(got) != 1 {
+				t.Fatalf("violations = %v, want one", got)
+			}
+			cause := got[0].Cause
+			if cause.Code != tc.code {
+				t.Errorf("code = %q, want %q", cause.Code, tc.code)
+			}
+			if cause.FallbackMessage != tc.msg {
+				t.Errorf("message = %q, want %q", cause.FallbackMessage, tc.msg)
+			}
+			if !maps.Equal(cause.Params, wantParams) {
+				t.Errorf("params = %v, want %v", cause.Params, wantParams)
+			}
+		})
+	}
+}

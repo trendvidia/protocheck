@@ -49,10 +49,10 @@ type Engine interface {
 // failure. Implementations must be pure — no I/O, no global state — as
 // engines may memoize calls.
 //
-// A failing @validate rule reports the returned Violation's Params, its Code
-// unless the rule sets `code`, and its FallbackMessage unless the rule sets
-// `message`. A failing bracket `check` rule reports only the FallbackMessage,
-// and only when the rule has no `message`; its code is the rule's id.
+// A failing rule reports the returned Violation's Params, its Code unless the
+// rule sets one (a @validate rule's `code`, a bracket check rule's id), and
+// its FallbackMessage unless the rule sets `message`. A bracket check rule
+// also adds its source under the "expression" param.
 type Function func(args []any) (bool, *Violation)
 
 // Catalog renders localized violation messages for a single locale
