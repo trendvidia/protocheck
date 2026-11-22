@@ -17,6 +17,7 @@ type validatorConfig struct {
 	exprEngine  ExpressionEngine
 	failFast    bool
 	strict      bool
+	zeroCheck   bool
 	err         error
 }
 
@@ -122,6 +123,29 @@ func WithRegistration(fn func(Engine) error) Option {
 func WithStrictValidation() Option {
 	return func(cfg *validatorConfig) {
 		cfg.strict = true
+	}
+}
+
+// WithZeroValueCheck makes New refuse a @validate rule that refuses the zero
+// value of a field that cannot hold one. A singular field without presence,
+// such as a proto3 scalar without `optional`, is not populated at its zero
+// value, so its rules never run on zero: `float bpm = 1 @validate(this >= 40.0)`
+// accepts 0. With this option New evaluates each such rule at zero, on fields
+// that are neither @required nor given a @default, and fails if any rule
+// refuses it. The fix is `optional` plus @required, or a @default.
+//
+// It is opt-in because the same shape is also written on purpose: `string
+// email = 1 @validate(is_email(this))` can mean "optional, but valid if
+// given", and the RFC-001 conformance fixtures use it that way. Turn it on for
+// schemas that never mean that.
+//
+// It covers the files WithDescriptors reaches, like WithStrictValidation, and
+// works with or without it. Functions are pure (RFC-001 §6.5), so calling them
+// with zero is safe. A rule that errors or panics at zero, or calls a function
+// with no implementation, is not refused.
+func WithZeroValueCheck() Option {
+	return func(cfg *validatorConfig) {
+		cfg.zeroCheck = true
 	}
 }
 
