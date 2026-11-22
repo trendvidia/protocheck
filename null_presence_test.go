@@ -1,6 +1,7 @@
 package protocheck_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/trendvidia/protocheck/v2"
@@ -132,5 +133,16 @@ inner { }
 				t.Errorf("violations = %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+// The decoder refuses null on a required field, so protocheck sees one only
+// from a producer that writes the mask itself.
+func TestDecoderRefusesNullRequired(t *testing.T) {
+	fd := compileProtos(t, map[string]string{"nulls.proto": nullSrc}, "nulls.proto")["nulls.proto"]
+	msg := dynamicpb.NewMessage(fd.Messages().ByName("Doc"))
+	_, err := (pxf.UnmarshalOptions{SkipPostDecode: true}).UnmarshalFull([]byte("name = null\n"), msg)
+	if err == nil || !strings.Contains(err.Error(), "null is not allowed on required field") {
+		t.Fatalf("err = %v, want the decoder to refuse null on a required field", err)
 	}
 }

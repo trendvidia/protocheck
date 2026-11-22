@@ -29,6 +29,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   rule and takes no `@default`. The PXF decoder already refuses null on a
   required field since protowire-go v1.16.0, so this changes only messages whose
   `_null` mask another producer wrote, and required oneofs.
+- **Dependencies**: protowire-go v1.13.0 → v1.19.0, protocompile v0.38.0 →
+  v0.38.1.
 - **A bracket `check` rule keeps a function's `Violation`** (#47), as a
   `@validate` rule already does. The function's `Params` now reach the report
   next to `expression`. Its `Code` is used when the rule has no `id`, where the
