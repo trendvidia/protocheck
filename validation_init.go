@@ -3,6 +3,7 @@ package protocheck
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	schemav1 "github.com/trendvidia/protos/protowire/schema/v1"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -316,4 +317,72 @@ func collectRequiredFunctions(fd protoreflect.FileDescriptor) []requiredFunc {
 	}
 
 	return required
+}
+
+// verifyZeroReachable implements WithZeroValueCheck (#46). A singular field
+// with implicit presence, such as a proto3 scalar without `optional`, is not
+// populated when it holds its zero value, so its rules do not run on zero: a
+// rule that zero fails, on a field that is neither @required nor given a
+// @default, therefore lets zero through.
+func (v *Validator) verifyZeroReachable(index *carrierIndex, files []protoreflect.FileDescriptor) error {
+	if index == nil {
+		return nil
+	}
+	now := time.Now()
+	var dead []string
+	var walk func(protoreflect.MessageDescriptors)
+	walk = func(messages protoreflect.MessageDescriptors) {
+		for i := 0; i < messages.Len(); i++ {
+			md := messages.Get(i)
+			walk(md.Messages())
+			mr := index.messageOf(md.FullName())
+			if mr == nil {
+				continue
+			}
+			fields := md.Fields()
+			for j := 0; j < fields.Len(); j++ {
+				fd := fields.Get(j)
+				fr := mr.fields[fd.Name()]
+				if fr == nil || fr.required != nil || fr.hasDefault || fd.HasPresence() || fd.IsList() || fd.IsMap() {
+					continue
+				}
+				zero := bindScalar(fd, fd.Default())
+				for _, rule := range fr.checks {
+					if v.refusesZero(rule, zero, now) {
+						dead = append(dead, zeroRuleString(fd, rule))
+					}
+				}
+			}
+		}
+	}
+	for _, fd := range files {
+		walk(fd.Messages())
+	}
+	if len(dead) > 0 {
+		return fmt.Errorf("protocheck: zero-value check: %d @validate rule(s) refuse a zero value they never see, "+
+			"because the field has no presence: %s; make the field optional and @required, or give it a @default",
+			len(dead), strings.Join(dead, ", "))
+	}
+	return nil
+}
+
+// refusesZero reports whether rule evaluates cleanly to false for zero. A
+// function with no implementation says nothing about zero, so its placeholder's
+// refusal does not count.
+func (v *Validator) refusesZero(rule *carrierRule, zero any, now time.Time) (refuses bool) {
+	defer func() {
+		if recover() != nil {
+			refuses = false
+		}
+	}()
+	ok, cause, err := rule.expr.eval(zero, now, v.callFunction)
+	return err == nil && !ok && (cause == nil || cause.Code != CodeFunctionUnimplemented)
+}
+
+func zeroRuleString(fd protoreflect.FieldDescriptor, rule *carrierRule) string {
+	s := fmt.Sprintf("%s @validate(%s)", fd.FullName(), rule.expr.src)
+	if loc := rule.source; loc != nil && loc.File != "" {
+		s += fmt.Sprintf(" (%s:%d:%d)", loc.File, loc.Line, loc.Column)
+	}
+	return s
 }

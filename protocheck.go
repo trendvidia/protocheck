@@ -123,6 +123,11 @@ func New(opts ...Option) (*Validator, error) {
 		return nil, err
 	}
 	v.carrier = carrier
+	if cfg.zeroCheck {
+		if err := v.verifyZeroReachable(carrier, v.listed); err != nil {
+			return nil, err
+		}
+	}
 	return v, nil
 }
 

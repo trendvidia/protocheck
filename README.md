@@ -533,6 +533,15 @@ optional float bpm = 1 @required @validate(this >= 40.0 && this <= 220.0);
 A message-level `@validate` rule binds `this` to the message, so it runs
 whether or not any field is set.
 
+`WithZeroValueCheck()` makes `New` find the first case for you. It evaluates
+each rule on such a field at zero, and fails if one refuses it, unless the
+field is `@required` or has a `@default`. The check is off by default, because
+the same shape is often written on purpose:
+`string email = 1 @validate(is_email(this))` can mean "optional, but valid if
+given", and the RFC-001 conformance fixtures use it that way. Turn it on for
+schemas that never mean that. Like `WithStrictValidation`, it covers the files
+`WithDescriptors` reaches.
+
 Add `WithDescriptors` to find those problems at startup.
 Functions registered by a generated helper go through `WithRegistration`, so
 they are in place before that check runs. `New` then checks the
