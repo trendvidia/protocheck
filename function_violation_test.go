@@ -144,3 +144,73 @@ func TestCheckKeepsFunctionViolation(t *testing.T) {
 		})
 	}
 }
+
+// A check rule with no id never reports an empty code (#51). It falls back
+// as a @validate rule does: the function's code, else the first function the
+// expression calls (in source order), else check.failed; an expression that
+// cannot be evaluated reports expression.error.
+const noIDSrc = `syntax = "proto3";
+package noid;
+
+import "protocheck/protocheck.proto";
+
+message Inline {
+  string word = 1 [(protocheck.field) = { check: [{ expression: "this != \"bad\"" }] }];
+}
+
+message Plain {
+  option (protocheck.message) = { check: [{ expression: "plain(this)" }] };
+}
+
+message Nested {
+  option (protocheck.message) = { check: [{ expression: "outer(inner(this))" }] };
+}
+
+message Broken {
+  option (protocheck.message) = { check: [{ expression: "nobody(this)" }] };
+}
+
+message BrokenWithID {
+  option (protocheck.message) = { check: [{ id: "rule.code", expression: "nobody(this)" }] };
+}
+`
+
+func TestCheckWithoutIDHasACode(t *testing.T) {
+	fd := compileProtos(t, map[string]string{"noid.proto": noIDSrc}, "noid.proto")["noid.proto"]
+	refuse := protocheck.Function(func([]any) (bool, *protocheck.Violation) { return false, nil })
+	v, err := protocheck.New(
+		protocheck.WithFunction("noid.plain", refuse),
+		protocheck.WithFunction("noid.outer", refuse),
+		protocheck.WithFunction("noid.inner", protocheck.Function(func([]any) (bool, *protocheck.Violation) { return true, nil })),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.Close()
+
+	for _, tc := range []struct {
+		message, code string
+		set           map[string]string
+	}{
+		{"Inline", "check.failed", map[string]string{"word": "bad"}},
+		{"Plain", "noid.plain", nil},
+		{"Nested", "noid.outer", nil},
+		{"Broken", "expression.error", nil},
+		{"BrokenWithID", "rule.code", nil},
+	} {
+		t.Run(tc.message, func(t *testing.T) {
+			md := fd.Messages().ByName(protoreflect.Name(tc.message))
+			msg := dynamicpb.NewMessage(md)
+			for name, val := range tc.set {
+				msg.Set(md.Fields().ByName(protoreflect.Name(name)), protoreflect.ValueOfString(val))
+			}
+			got := carrierViolations(t, v, msg)
+			if len(got) != 1 {
+				t.Fatalf("violations = %v, want one", got)
+			}
+			if got[0].Cause.Code != tc.code {
+				t.Errorf("code = %q, want %q (message %q)", got[0].Cause.Code, tc.code, got[0].Cause.FallbackMessage)
+			}
+		})
+	}
+}

@@ -43,6 +43,9 @@ import (
 type compiledExpr struct {
 	src  string
 	root exprNode
+	// firstCall is the first declared function the source calls, in
+	// source order; "" when it calls none.
+	firstCall string
 }
 
 // exprEnv is one evaluation's bindings.
@@ -93,7 +96,7 @@ func parseExpr(src string, p *exprParser) (*compiledExpr, error) {
 	if p.tok.kind != tokEOF {
 		return nil, fmt.Errorf("parsing %q: unexpected %q", src, p.tok.text)
 	}
-	return &compiledExpr{src: src, root: root}, nil
+	return &compiledExpr{src: src, root: root, firstCall: p.firstCall}, nil
 }
 
 // eval runs the expression. A false result carries the function-returned
@@ -231,6 +234,8 @@ type exprParser struct {
 	// loose suffix scan could pick between same-named functions
 	// arbitrarily.
 	exact bool
+	// firstCall records the first callee resolved, in source order.
+	firstCall string
 }
 
 func (p *exprParser) next() {
@@ -431,11 +436,17 @@ func (p *exprParser) parseTerm() (exprNode, error) {
 			}
 			return &literalNode{val: ev}, p.err
 		}
+		// Resolve before the arguments, so a call nested in them does not
+		// come first.
+		fqn, resolved := p.resolveCallee(name)
+		if resolved && p.firstCall == "" {
+			p.firstCall = fqn
+		}
 		args, err := p.parseArgs()
 		if err != nil {
 			return nil, err
 		}
-		if fqn, ok := p.resolveCallee(name); ok {
+		if resolved {
 			return &callNode{fqn: fqn, args: args}, p.err
 		}
 		// Not a declared function: a §5.4 builtin, absent from
