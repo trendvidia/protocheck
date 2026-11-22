@@ -2,6 +2,7 @@ package protocheck
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -183,18 +184,30 @@ func (v *Validator) evalBuiltinCheck(now time.Time, path FieldPath, this any, ex
 	return checkFailed(path, expr, cause)
 }
 
-// checkFailed builds the violation for a Check rule that evaluated false:
-// the rule's own message, else a function-returned cause's, else a
-// synthesized one.
+// checkFailed builds the violation for a Check rule that evaluated false,
+// with the precedence a @validate rule uses (RFC-001 §7, evalCarrierRule):
+// the rule's id, else a function-returned cause's code; the rule's message,
+// else the cause's, else a synthesized one. The cause's params are kept, and
+// the expression source is added under "expression", replacing any param of
+// that name.
 func checkFailed(path FieldPath, expr *pb.Expression, cause *Violation) *EnrichedViolation {
+	code := expr.GetId()
 	msg := expr.GetMessage()
-	if msg == "" && cause != nil {
-		msg = cause.FallbackMessage
+	p := map[string]any{}
+	if cause != nil {
+		if code == "" {
+			code = cause.Code
+		}
+		if msg == "" {
+			msg = cause.FallbackMessage
+		}
+		maps.Copy(p, cause.Params)
 	}
 	if msg == "" {
 		msg = fmt.Sprintf("expression %q failed", expr.GetExpression())
 	}
-	return newViolationP(path, expr.GetId(), params("expression", expr.GetExpression()), "%s", msg)
+	p["expression"] = expr.GetExpression()
+	return newViolationP(path, code, p, "%s", msg)
 }
 
 // checkCallees maps the spellings a Check expression may use for a
