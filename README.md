@@ -455,10 +455,10 @@ v, err := protocheck.New(
 An expression can call a function by its full name (`acme.v1.tempo_ordered`)
 or by any dot-separated suffix that only one registered function has
 (`tempo_ordered`, `v1.tempo_ordered`). If the function returns a
-`*Violation` and the rule has no `message`, the function's message is used.
-In a `check` rule that is all the function's `Violation` contributes: the
-violation's code is the rule's `id`, and its `Params` hold only the
-`expression` (#47). A `@validate` rule keeps more; see below.
+`*Violation`, the report keeps its `Params`, with the rule's `expression`
+added. The code is the rule's `id`, or the function's `Code` when the rule has
+no `id`. The message is the rule's `message`, or the function's when the rule
+has none. A `@validate` rule works the same way; see below.
 
 ### `@validate` and `@required` rules
 
