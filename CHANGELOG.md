@@ -14,6 +14,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   0. The error names each rule and says to use `optional` plus `@required`, or a
   `@default`. It is opt-in because "optional, but valid if given" rules, which
   the RFC-001 fixtures use, have the same shape.
+- **`protocheckconnect.WithLocale`** (#48). The interceptor's error message
+  can now be in the caller's language. `WithLocale` takes a function that picks
+  a locale from the request header, and the message is rendered from the catalog
+  registered for that locale. The error still wraps `*ValidationError`, and the
+  report detail is unchanged. Released with the next `protocheckconnect/v0.x` tag;
+  it needs no protocheck change.
 ### Changed
 
 - **A bracket `check` rule keeps a function's `Violation`** (#47), as a
