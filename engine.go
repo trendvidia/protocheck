@@ -48,6 +48,11 @@ type Engine interface {
 // (RFC-001 §6.5): (true, nil) on success, (false, &Violation{...}) on
 // failure. Implementations must be pure — no I/O, no global state — as
 // engines may memoize calls.
+//
+// A failing @validate rule reports the returned Violation's Params, its Code
+// unless the rule sets `code`, and its FallbackMessage unless the rule sets
+// `message`. A failing bracket `check` rule reports only the FallbackMessage,
+// and only when the rule has no `message`; its code is the rule's id.
 type Function func(args []any) (bool, *Violation)
 
 // Catalog renders localized violation messages for a single locale

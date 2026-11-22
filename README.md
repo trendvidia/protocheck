@@ -456,6 +456,9 @@ An expression can call a function by its full name (`acme.v1.tempo_ordered`)
 or by any dot-separated suffix that only one registered function has
 (`tempo_ordered`, `v1.tempo_ordered`). If the function returns a
 `*Violation` and the rule has no `message`, the function's message is used.
+In a `check` rule that is all the function's `Violation` contributes: the
+violation's code is the rule's `id`, and its `Params` hold only the
+`expression` (#47). A `@validate` rule keeps more; see below.
 
 ### `@validate` and `@required` rules
 
@@ -473,6 +476,20 @@ A function no one registered fails closed: a rule that calls it fails with
 `protowire.function.unimplemented`, or with the rule's own `code` if it has
 one. So does a rule that cannot be loaded: `Validate` returns an error that is
 not a `*ValidationError`, and the message counts as not validated.
+
+When a function fails a `@validate` rule, the `Violation` it returns is the
+report's cause, with the rule's own settings on top (RFC-001 §7):
+
+- `Params` are the function's.
+- The code is the rule's `code` if it sets one, else the function's `Code`,
+  else one derived from the function (its declared `error_code`, or its full
+  name).
+- The message is the rule's `message` if it sets one, else the function's
+  `FallbackMessage`, else one naming the expression.
+
+So a function that can fail in several ways reports which one through its
+`Code`, as long as the rule sets no `code` of its own. A rule's `code` replaces
+every code its function returns.
 
 A leading `@required` on a oneof means one of its members must be set:
 

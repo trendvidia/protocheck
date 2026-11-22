@@ -6,6 +6,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Documentation
+
+- **What a function's `Violation` reaches the report with** (#47). The README
+  and `Function`'s doc now say it. A `@validate` rule keeps the function's
+  `Params`, takes its `Code` unless the rule sets `code`, and takes its message
+  unless the rule sets `message`. A bracket `check` rule keeps only the message,
+  and only when the rule has none. A test pins the `@validate` behaviour.
+
 ## [2.10.1] — 2026-10-31
 
 A patch release that removes the proto compiler from programs that link
