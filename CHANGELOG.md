@@ -22,6 +22,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   it needs no protocheck change.
 ### Changed
 
+- **Null no longer satisfies `@required`**, as RFC-001 §6.1 now says
+  (trendvidia/protowire#569, #575). A `@required` field bound to null reports
+  `protowire.required`, as an absent one does. A `@required` oneof whose only
+  bound member is null reports it too. A null field still runs no `@validate`
+  rule and takes no `@default`. The PXF decoder already refuses null on a
+  required field since protowire-go v1.16.0, so this changes only messages whose
+  `_null` mask another producer wrote, and required oneofs.
 - **A bracket `check` rule keeps a function's `Violation`** (#47), as a
   `@validate` rule already does. The function's `Params` now reach the report
   next to `expression`. Its `Code` is used when the rule has no `id`, where the
