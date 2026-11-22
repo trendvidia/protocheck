@@ -6,6 +6,15 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `check` rule with no `id` reports a code** (#51). It used to report an
+  empty one. Its code is now the code the function returns, else the full name
+  of the first function the expression calls, else `check.failed`. An
+  expression that cannot be compiled or evaluated reports `expression.error`.
+  These are the fallbacks a `@validate` rule already has. Rules with an `id`
+  are unchanged.
+
 ## [2.11.0] — 2026-11-21
 
 A minor release from a downstream bug: a tempo of 0 BPM got past a 40–220 range

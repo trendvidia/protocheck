@@ -460,6 +460,11 @@ added. The code is the rule's `id`, or the function's `Code` when the rule has
 no `id`. The message is the rule's `message`, or the function's when the rule
 has none. A `@validate` rule works the same way; see below.
 
+A `check` rule with no `id` still reports a code. If no function returns one,
+the code is the full name of the first function the expression calls, or
+`check.failed` when it calls none. An expression that cannot be compiled or
+evaluated reports `expression.error`, unless the rule has an `id`.
+
 ### `@validate` and `@required` rules
 
 `New()` enforces a schema's `@required`, `@default` and `@validate` rules as

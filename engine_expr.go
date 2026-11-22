@@ -110,12 +110,12 @@ func (v *Validator) evalFieldExpression(now time.Time, path FieldPath, val proto
 	}
 	pass, err := v.exprEngine.EvalField(val, kind, expr.GetExpression())
 	if err != nil {
-		return newViolation(path, expr.GetId(), "%v", err)
+		return newViolation(path, checkCode(expr, codeExpressionError), "%v", err)
 	}
 	if pass {
 		return nil
 	}
-	return checkFailed(path, expr, nil)
+	return checkFailed(path, expr, nil, "")
 }
 
 // evalMessageFieldExpression applies a field-level Check expression to a
@@ -127,7 +127,7 @@ func (v *Validator) evalMessageFieldExpression(now time.Time, path FieldPath, ms
 	if v.exprEngine == nil {
 		return v.evalBuiltinCheck(now, path, bindMessage(msg), expr)
 	}
-	return newViolation(path, expr.GetId(),
+	return newViolation(path, checkCode(expr, codeExpressionError),
 		"expression engine %s cannot evaluate a field-level check on a message-typed field", v.exprEngine.Info().Name)
 }
 
@@ -151,12 +151,12 @@ func (v *Validator) evalMessageExpression(now time.Time, path FieldPath, msg pro
 	}
 	pass, err := v.exprEngine.EvalMessage(msg, expr.GetExpression())
 	if err != nil {
-		return newViolation(path, expr.GetId(), "%v", err)
+		return newViolation(path, checkCode(expr, codeExpressionError), "%v", err)
 	}
 	if pass {
 		return nil
 	}
-	return checkFailed(path, expr, nil)
+	return checkFailed(path, expr, nil, "")
 }
 
 // evalBuiltinCheck evaluates a Check expression in the RFC-001 §5.4
@@ -169,28 +169,45 @@ func (v *Validator) evalBuiltinCheck(now time.Time, path FieldPath, this any, ex
 	} else {
 		c, err := compileCheckExpr(src, v.checkCallees())
 		if err != nil {
-			return newViolation(path, expr.GetId(), "%v", err)
+			return newViolation(path, checkCode(expr, codeExpressionError), "%v", err)
 		}
 		v.checkExprs.Store(src, c)
 		compiled = c
 	}
 	pass, cause, err := compiled.eval(this, now, v.callFunction)
 	if err != nil {
-		return newViolation(path, expr.GetId(), "%v", err)
+		return newViolation(path, checkCode(expr, codeExpressionError), "%v", err)
 	}
 	if pass {
 		return nil
 	}
-	return checkFailed(path, expr, cause)
+	return checkFailed(path, expr, cause, compiled.firstCall)
+}
+
+// Codes a Check rule with no id falls back to, as a @validate rule does
+// (RFC-001 §7's engine-synthesized rung).
+const (
+	codeCheckFailed     = "check.failed"
+	codeExpressionError = "expression.error"
+)
+
+// checkCode is a Check rule's id, else fallback, so that no Check violation
+// has an empty code.
+func checkCode(expr *pb.Expression, fallback string) string {
+	if id := expr.GetId(); id != "" {
+		return id
+	}
+	return fallback
 }
 
 // checkFailed builds the violation for a Check rule that evaluated false,
 // with the precedence a @validate rule uses (RFC-001 §7, evalCarrierRule):
-// the rule's id, else a function-returned cause's code; the rule's message,
-// else the cause's, else a synthesized one. The cause's params are kept, and
-// the expression source is added under "expression", replacing any param of
-// that name.
-func checkFailed(path FieldPath, expr *pb.Expression, cause *Violation) *EnrichedViolation {
+// the rule's id, else a function-returned cause's code, else the first
+// function the expression calls (firstCall), else check.failed; the rule's
+// message, else the cause's, else a synthesized one. The cause's params are
+// kept, and the expression source is added under "expression", replacing any
+// param of that name.
+func checkFailed(path FieldPath, expr *pb.Expression, cause *Violation, firstCall string) *EnrichedViolation {
 	code := expr.GetId()
 	msg := expr.GetMessage()
 	p := map[string]any{}
@@ -202,6 +219,12 @@ func checkFailed(path FieldPath, expr *pb.Expression, cause *Violation) *Enriche
 			msg = cause.FallbackMessage
 		}
 		maps.Copy(p, cause.Params)
+	}
+	if code == "" {
+		code = firstCall
+	}
+	if code == "" {
+		code = codeCheckFailed
 	}
 	if msg == "" {
 		msg = fmt.Sprintf("expression %q failed", expr.GetExpression())
