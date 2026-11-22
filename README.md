@@ -513,6 +513,26 @@ with the mask (`pxf build` adds it) and a decode with `pxf.UnmarshalFull`,
 because `pxf.Unmarshal` records no nulls. Without those, a null looks absent.
 Bracket rules do not read the mask.
 
+A field rule runs only when the field is populated. A field that is not
+populated and has no `@default` runs none of its `@validate` rules; with a
+`@default`, they run against the default. For a proto3 scalar without
+`optional`, the zero value (`0`, `""`, `false`) counts as not populated, so
+a range that excludes zero still accepts 0:
+
+```protobuf
+float bpm = 1 @validate(this >= 40.0 && this <= 220.0);  // accepts 0
+```
+
+To refuse zero, give the field presence and require it. An unset field then
+fails `@required`, and an explicit 0 fails the range:
+
+```protobuf
+optional float bpm = 1 @required @validate(this >= 40.0 && this <= 220.0);
+```
+
+A message-level `@validate` rule binds `this` to the message, so it runs
+whether or not any field is set.
+
 Add `WithDescriptors` to find those problems at startup.
 Functions registered by a generated helper go through `WithRegistration`, so
 they are in place before that check runs. `New` then checks the
@@ -657,7 +677,7 @@ func main() {
 
 - **Recursive**: nested messages are validated automatically. A message field with no `(protocheck.field)` annotation still has its nested constraints checked when populated.
 - **Oneof fields**: only the selected field is validated; unset alternatives are skipped.
-- **Proto3 defaults**: unset scalar fields have their default value (`""`, `0`, `false`). Use `ignore: IGNORE_IF_UNPOPULATED` to skip validation when the field has no presence, or `IGNORE_IF_DEFAULT_VALUE` to skip whenever the value equals the default (see [Ignore modes](#ignore-modes)).
+- **Proto3 defaults in bracket rules**: an unset scalar field has its default value (`""`, `0`, `false`), and bracket rules check that value. Use `ignore: IGNORE_IF_UNPOPULATED` to skip validation when the field has no presence, or `IGNORE_IF_DEFAULT_VALUE` to skip whenever the value equals the default (see [Ignore modes](#ignore-modes)). `@validate` rules work the other way: they skip a field that is not populated, and a proto3 scalar without `optional` holding its zero value is not populated (see [`@validate` and `@required` rules](#validate-and-required-rules)).
 - **Caching**: each `check` expression is parsed once per `Validator` and reused across all subsequent `Validate` calls.
 - **Thread-safe after construction**: once `New()` returns, the `Validator` is safe to share across goroutines. Don't pass the same `*validatorConfig` between `Option`s; `New(opts...)` builds it.
 

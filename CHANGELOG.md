@@ -13,6 +13,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `Params`, takes its `Code` unless the rule sets `code`, and takes its message
   unless the rule sets `message`. A bracket `check` rule keeps only the message,
   and only when the rule has none. A test pins the `@validate` behaviour.
+- **`@validate` skips an unpopulated field** (#46). The README now says that a
+  `@validate` rule does not run on a field that is not populated and has no
+  `@default`, and that a proto3 scalar without `optional` holding its zero value
+  is not populated. So a range that excludes zero accepts 0; `optional` plus
+  `@required` refuses it. The "Proto3 defaults" note now says it is about
+  bracket rules, which do check the zero value. Tests pin both behaviours.
 
 ## [2.10.1] — 2026-10-31
 
