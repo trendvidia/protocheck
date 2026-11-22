@@ -6,6 +6,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.11.0] — 2026-11-21
+
+A minor release from a downstream bug: a tempo of 0 BPM got past a 40–220 range
+rule. It adds `WithZeroValueCheck`, which finds rules like that one, and makes
+bracket `check` rules keep what a function returns. It also follows RFC-001's
+newer null rule: null no longer satisfies `@required`.
+
 ### Added
 
 - **`WithZeroValueCheck`** (#46), off by default. It makes `New` refuse a
@@ -18,8 +25,10 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   can now be in the caller's language. `WithLocale` takes a function that picks
   a locale from the request header, and the message is rendered from the catalog
   registered for that locale. The error still wraps `*ValidationError`, and the
-  report detail is unchanged. Released with the next `protocheckconnect/v0.x` tag;
+  report detail is unchanged. It is in the `protocheckconnect` module, so it
+  ships with that module's next `protocheckconnect/v0.x` tag, not with this one;
   it needs no protocheck change.
+
 ### Changed
 
 - **Null no longer satisfies `@required`**, as RFC-001 §6.1 now says
@@ -799,7 +808,8 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
 
 - Initial release.
 
-[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.10.1...HEAD
+[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.11.0...HEAD
+[2.11.0]: https://github.com/trendvidia/protocheck/compare/v2.10.1...v2.11.0
 [2.10.1]: https://github.com/trendvidia/protocheck/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/trendvidia/protocheck/compare/v2.9.0...v2.10.0
 [2.9.0]: https://github.com/trendvidia/protocheck/compare/v2.8.0...v2.9.0
