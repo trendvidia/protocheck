@@ -6,6 +6,15 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`protocheckconnect.WithLocale`** (#48). The interceptor's error message
+  can now be in the caller's language. `WithLocale` takes a function that picks
+  a locale from the request header, and the message is rendered from the catalog
+  registered for that locale. The error still wraps `*ValidationError`, and the
+  report detail is unchanged. Released with the next `protocheckconnect/v0.x` tag;
+  it needs no protocheck change.
+
 ### Documentation
 
 - **What a function's `Violation` reaches the report with** (#47). The README

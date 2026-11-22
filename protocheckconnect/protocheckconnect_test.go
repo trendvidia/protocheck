@@ -374,3 +374,92 @@ func TestNilValidator(t *testing.T) {
 		t.Fatal("NewInterceptor(nil) succeeded")
 	}
 }
+
+// fallbackMessage is the message ruleFile's rule reports without a catalog.
+const fallbackMessage = `expression "this != "bad"" failed`
+
+// localeInterceptor has an English and a French catalog for word.bad, and
+// takes the locale from Accept-Language.
+func localeInterceptor(t *testing.T) *protocheckconnect.Interceptor {
+	t.Helper()
+	v, err := protocheck.New(
+		protocheck.WithDescriptors(ruleFile(t)),
+		protocheck.WithCatalog("en", protocheck.NewMapCatalog(map[string]string{"word.bad": "that word is not allowed"})),
+		protocheck.WithCatalog("fr", protocheck.NewMapCatalog(map[string]string{"word.bad": "ce mot est interdit"})),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { v.Close() })
+	icpt, err := protocheckconnect.NewInterceptor(v, protocheckconnect.WithLocale(func(h http.Header) string {
+		return h.Get("Accept-Language")
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return icpt
+}
+
+// wantMessage checks a failure's message and that it is still the
+// interceptor's error: the report detail and, when local, the wrapped
+// *ValidationError.
+func wantMessage(t *testing.T, err error, code connect.Code, want string, local bool) {
+	t.Helper()
+	wantFailure(t, err, code)
+	var cerr *connect.Error
+	if !errors.As(err, &cerr) || cerr.Message() != want {
+		t.Errorf("message = %q, want %q", cerr.Message(), want)
+	}
+	var ve *protocheck.ValidationError
+	if local && !errors.As(err, &ve) {
+		t.Errorf("err = %T, want it to wrap *ValidationError", err)
+	}
+	// The detail keeps the fallback message, for a client that localizes.
+	if got := protocheckconnect.ReportOf(err).GetViolations()[0].GetCause().GetFallbackMessage(); got != fallbackMessage {
+		t.Errorf("report fallback message = %q", got)
+	}
+}
+
+func TestLocaleUnaryServer(t *testing.T) {
+	srv := server(t, &handlers{}, localeInterceptor(t))
+	for _, tc := range []struct{ locale, want string }{
+		{"en", "validation failed: value: that word is not allowed [word.bad]"},
+		{"fr", "validation failed: value: ce mot est interdit [word.bad]"},
+		// No catalog for the locale: the fallback message.
+		{"de", "validation failed: value: " + fallbackMessage + " [word.bad]"},
+	} {
+		req := connect.NewRequest(wrapperspb.String("bad"))
+		req.Header().Set("Accept-Language", tc.locale)
+		_, err := client(srv, "Unary", nil).CallUnary(t.Context(), req)
+		wantMessage(t, err, connect.CodeInvalidArgument, tc.want, false)
+	}
+}
+
+func TestLocaleHandlerStream(t *testing.T) {
+	srv := server(t, &handlers{}, localeInterceptor(t))
+	stream := client(srv, "Client", nil).CallClientStream(t.Context())
+	stream.RequestHeader().Set("Accept-Language", "fr")
+	_ = stream.Send(wrapperspb.String("bad"))
+	_, err := stream.CloseAndReceive()
+	wantMessage(t, err, connect.CodeInvalidArgument, "validation failed: value: ce mot est interdit [word.bad]", false)
+}
+
+func TestLocaleClient(t *testing.T) {
+	srv := server(t, &handlers{reply: "bad"}, nil)
+	icpt := localeInterceptor(t)
+
+	req := connect.NewRequest(wrapperspb.String("fine"))
+	req.Header().Set("Accept-Language", "fr")
+	_, err := client(srv, "Unary", icpt).CallUnary(t.Context(), req)
+	wantMessage(t, err, connect.CodeInternal, "validation failed: value: ce mot est interdit [word.bad]", true)
+
+	// A client stream reads the locale at its first Send, then fails on
+	// the response it receives.
+	stream := client(srv, "Client", icpt).CallClientStream(t.Context())
+	stream.RequestHeader().Set("Accept-Language", "en")
+	if err := stream.Send(wrapperspb.String("fine")); err != nil {
+		t.Fatal(err)
+	}
+	_, err = stream.CloseAndReceive()
+	wantMessage(t, err, connect.CodeInternal, "validation failed: value: that word is not allowed [word.bad]", true)
+}
