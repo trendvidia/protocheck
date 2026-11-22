@@ -6,6 +6,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.11.1] — 2026-11-22
+
+A patch release: a bracket `check` rule with no `id` no longer reports an
+empty violation code.
+
 ### Fixed
 
 - **A `check` rule with no `id` reports a code** (#51). It used to report an
@@ -817,7 +822,8 @@ the engine SPI, carrier-rule validation, and catalog-based i18n.
 
 - Initial release.
 
-[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.11.0...HEAD
+[Unreleased]: https://github.com/trendvidia/protocheck/compare/v2.11.1...HEAD
+[2.11.1]: https://github.com/trendvidia/protocheck/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/trendvidia/protocheck/compare/v2.10.1...v2.11.0
 [2.10.1]: https://github.com/trendvidia/protocheck/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/trendvidia/protocheck/compare/v2.9.0...v2.10.0
