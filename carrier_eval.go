@@ -51,10 +51,12 @@ func (v *Validator) validateCarrierRules(now time.Time, run *carrierRun, path Fi
 		}
 	}
 
-	// ── @required oneofs: a member set or bound to null is present ──────
+	// ── @required oneofs: a member must hold a value ────────────────────
+	// A member bound to null does not count: a required oneof holds a
+	// value, as a required field does (§6.1).
 	for _, ro := range mr.requiredOneofs {
 		od := msg.Descriptor().Oneofs().ByName(ro.name)
-		if od == nil || msg.WhichOneof(od) != nil || run.anyNull(path, od) {
+		if od == nil || msg.WhichOneof(od) != nil {
 			continue
 		}
 		violations = append(violations, &EnrichedViolation{
@@ -85,11 +87,11 @@ func (v *Validator) validateCarrierRules(now time.Time, run *carrierRun, path Fi
 		// inherited from the message classification.
 		sensitive := fr.sensitive || mr.sensitive
 		fieldPath := path.child(segmentOf(fd))
-		// A null field is present, runs no rule and takes no @default (§6.1).
-		if run.isNull(fieldPath) {
-			continue
-		}
-		populated := msg.Has(fd)
+		// A required field holds a value, so null fails @required as absence
+		// does. Otherwise a null field runs no rule and takes no @default
+		// (§6.1).
+		null := run.isNull(fieldPath)
+		populated := !null && msg.Has(fd)
 
 		if fr.required != nil && !populated {
 			violations = append(violations, &EnrichedViolation{
@@ -105,6 +107,9 @@ func (v *Validator) validateCarrierRules(now time.Time, run *carrierRun, path Fi
 			if v.failFast {
 				return violations
 			}
+			continue
+		}
+		if null {
 			continue
 		}
 
@@ -273,17 +278,6 @@ func newCarrierRun(index *carrierIndex, root protoreflect.Message) *carrierRun {
 
 func (r *carrierRun) isNull(path FieldPath) bool {
 	return len(r.nulls) > 0 && r.nulls[path.String()]
-}
-
-// anyNull reports whether a member of od at path is bound to null.
-func (r *carrierRun) anyNull(path FieldPath, od protoreflect.OneofDescriptor) bool {
-	fields := od.Fields()
-	for i := 0; i < fields.Len(); i++ {
-		if r.isNull(path.child(segmentOf(fields.Get(i)))) {
-			return true
-		}
-	}
-	return false
 }
 
 // redactIf withholds a violation's captured value when the field is

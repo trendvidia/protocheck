@@ -506,9 +506,12 @@ message Payment {
 It reports `protowire.required` with a path ending in the oneof's name, and it
 needs no `(protocheck.oneof)` bracket.
 
-Null counts as present. A field or oneof member a PXF document set to null
-satisfies `@required`, runs no `@validate` rule and takes no `@default`.
-protocheck reads this from the message's `_null` mask, so it needs a schema
+Null means "no value" (RFC-001 §6.1). A field a PXF document set to null runs
+no `@validate` rule and takes no `@default`. It does not satisfy `@required`:
+a required field holds a value, so null fails it as absence does, and the PXF
+decoder refuses the null before protocheck sees it. Likewise a `@required`
+oneof needs a member holding a value, so a member bound to null does not count.
+protocheck reads nulls from the message's `_null` mask, so it needs a schema
 with the mask (`pxf build` adds it) and a decode with `pxf.UnmarshalFull`,
 because `pxf.Unmarshal` records no nulls. Without those, a null looks absent.
 Bracket rules do not read the mask.

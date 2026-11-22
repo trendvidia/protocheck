@@ -3,9 +3,9 @@ module github.com/trendvidia/protocheck/v2
 go 1.26.2
 
 require (
-	github.com/trendvidia/protocompile v0.38.0
+	github.com/trendvidia/protocompile v0.38.1
 	github.com/trendvidia/protos v0.1.4
-	github.com/trendvidia/protowire-go v1.13.0
+	github.com/trendvidia/protowire-go v1.19.0
 	google.golang.org/protobuf v1.36.12
 )
 
